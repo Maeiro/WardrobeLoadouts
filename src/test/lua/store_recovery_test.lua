@@ -63,6 +63,7 @@ ISEquipWeaponAction = { new = function(_, _, item, _, primary, both)
 end }
 ISWLMRestoreAttachmentsAction = { new = function(_, _, entries, _, operation)
     return { Type = "attach", run = function()
+        operation = operation or WLM.Client.pendingSwitch
         assert(operation)
         for _, entry in ipairs(entries) do items[entry.id].slot = entry.slotIndex; items[entry.id].slotType = entry.slotType end
     end }
@@ -231,3 +232,96 @@ assert(WLM.orderAttachmentSlots(hotbar.availableSlot, { { slotIndex = 2, slotTyp
 print("PASS: partial storage, cancellation and server rejection recover the original items, two-hand equipment, attachment slot and favorites; interrupted recovery reports failure without looping.")
 print("PASS: swap failure during equipping, storage, queue cancellation and server rejection restores the previous outfit and returns the incoming set.")
 print("PASS: attachment restoration preserves saved positions after the hotbar rebuilds sling and belt slots in a different order.")
+
+function hotbar:removeItem(value)
+    self.attachedItems[value.slot] = nil
+    value.slot, value.slotType = -1, nil
+end
+local retained, replaced, incoming = item(10, inventory), item(11, inventory), item(12, inventory)
+retained.slot, retained.slotType = 1, "Back"
+replaced.slot, replaced.slotType = 3, "Canteen"
+hotbar.attachedItems = { [1] = retained, [3] = replaced }
+local slotOrder = hotbar.availableSlot
+local mergeOperation = { merge = true }
+Client.restoreAttachments(player, { { id = 12, slotIndex = 1, slotType = "Canteen", attachmentType = "Test" } }, mergeOperation)
+assert(not mergeOperation.failed and hotbar.availableSlot == slotOrder)
+assert(retained.slot == 1 and retained.slotType == "Back")
+assert(replaced.slot == -1 and replaced.container == inventory)
+assert(incoming.slot == 3 and incoming.slotType == "Canteen")
+
+function player:getVehicle() return nil end
+function player:getOnlineID() return 1 end
+function inventory:getItems() return { size = function() return 0 end } end
+WLM.capacity = function() end
+WLM.capacityLimit = function() return 1000 end
+WLM.storageWeight = function() return 0 end
+WLM.itemWeight = function() return 1 end
+WLM.planStorage = function(_, _, values) assert(#values == 0); return {} end
+WLM.slots = function() return { { id = "merge" } }, 1 end
+ISWLMFinalizeSwitchAction = { new = function() return { Type = "finalizeSwitch", run = function() Client.finishSwitch(true) end } end }
+local function setupMerge()
+    queue, worn = {}, {}
+    ISTimedActionQueue.queues[player].queue = queue
+    hotbar.attachedItems = {}
+    local shirt, shoes, primary, secondary = item(20, inventory), item(21, inventory), item(22, inventory), item(23, inventory)
+    local newShirt = item(24, wardrobe)
+    shirt.location, shoes.location, newShirt.location = "Shirt", "Shoes", "Shirt"
+    worn[20], worn[21] = true, true
+    player.primary, player.secondary = primary, secondary
+    data.sets = { merge = { id = "merge", name = "Merge", slot = 1, worn = { { id = 24 } }, attached = {}, hands = {} } }
+    data.active, data.activeByPlayer = nil, nil
+    Client.data, Client.pendingSwitch, Client.pendingStore = data, nil, nil
+    ISWearClothing.new = function(_, _, value)
+        return { Type = "wear", run = function()
+            for id in pairs(worn) do if items[id].location == value.location then worn[id] = nil end end
+            worn[value.id] = true
+        end }
+    end
+    return newShirt
+end
+setupMerge()
+Client.beginSwitch("merge", true, false, true)
+assert(Client.pendingSwitch and Client.pendingSwitch.merge)
+for _, action in ipairs(queue) do assert(action.Type ~= "unequip") end
+drain()
+assert(not worn[20] and worn[21] and worn[24])
+assert(items[20].container == inventory and items[21].container == inventory)
+assert(player.primary == items[22] and player.secondary == items[23])
+assert(Client.pendingSwitch == nil and data.sets.merge == nil)
+assert(items[24].container == inventory and player.maxWeight == 15 and inventory.capacity == 50)
+
+setupMerge()
+data.sets.merge.hands.primary = { id = 24 }
+Client.beginSwitch("merge", true, false, true)
+drain()
+assert(player.primary == items[24] and player.secondary == items[23] and worn[21])
+
+setupMerge()
+Client.beginSwitch("merge", true, false, true)
+while #queue > 0 do table.remove(queue) end
+Client.finishSwitch(false, "Cancelled merge")
+drain()
+assert(worn[20] and worn[21] and not worn[24])
+assert(items[24].container == wardrobe and data.sets.merge ~= nil)
+assert(player.primary == items[22] and player.secondary == items[23])
+setupMerge()
+isClient = function() return true end
+local request
+sendClientCommand = function(_, _, command, args)
+    lastCommand = command
+    if command == "beginSwitch" then request = args end
+end
+Client.beginSwitch("merge", true, false, true)
+assert(request.merge and request.slotAction and #WLM.profileItems(request.swapProfile) == 0)
+assert(Client.pendingSwitch == nil and #queue == 0)
+serverHandler(WLM.ID, "switchReady", { object = {}, targetId = "merge", activeId = "",
+    slotAction = true, swapProfile = request.swapProfile, preferences = request.preferences, merge = true })
+assert(Client.pendingSwitch.merge and Client.switchObjectArgs.merge)
+drain()
+assert(Client.pendingSwitch.phase == "server" and data.sets.merge ~= nil)
+assert(lastCommand == "finishSwitch" and worn[21] and worn[24])
+serverHandler(WLM.ID, "switchComplete", { object = {}, targetId = "merge" })
+assert(Client.pendingSwitch == nil)
+isClient = function() return false end
+print("PASS: merge preserves unrelated clothing, hands and attachment order, replaces conflicts without storing current items, empties the slot only on success, and recovers after cancellation.")
+print("PASS: multiplayer waits for the server lock, retains merge mode on switchReady and waits for commit acknowledgement.")

@@ -22,7 +22,8 @@ public class CheckTranslations {
         }
         for (String code : new String[] {"EN", "ES", "FR", "DE", "IT", "PT", "PTBR", "RU", "CN", "UA", "KO", "JP", "TR"}) {
             String prefix = "UI_WLM_Locale_" + code + "_IGUI_WLM_";
-            if (translations.get(prefix + "Title") == null || translations.get(prefix + "MissingCount") == null) {
+            if (translations.get(prefix + "Title") == null || translations.get(prefix + "MissingCount") == null
+                    || translations.get(prefix + "Merge") == null || translations.get(prefix + "MergeTip") == null) {
                 throw new AssertionError("Missing translations for " + code);
             }
         }

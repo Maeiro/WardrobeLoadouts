@@ -285,6 +285,10 @@ local function handleBeginSwitch(player, object, args)
             fail(player, "The equipment data could not be saved.", "IGUI_WLM_ErrorSave")
             return
         end
+        if args.merge == true and #WLM.profileItems(args.swapProfile) > 0 then
+            fail(player, "The equipment data could not be saved.", "IGUI_WLM_ErrorSave")
+            return
+        end
         active = args.swapProfile
         local slots = WLM.slots(data, object:getContainer())
         for slot, entry in pairs(slots) do if entry.id == targetId then active.slot = slot; break end end
@@ -331,7 +335,8 @@ local function handleBeginSwitch(player, object, args)
     slotSwitches[object] = args.slotAction and { player = player, targetId = targetId, profile = active, preferences = preferences } or nil
     beginCarry(player, object)
     send(player, "switchReady", { targetId = targetId, activeId = activeId,
-        slotAction = args.slotAction == true, swapProfile = args.slotAction and active or nil, preferences = preferences })
+        slotAction = args.slotAction == true, swapProfile = args.slotAction and active or nil, preferences = preferences,
+        merge = args.merge == true and args.slotAction == true })
 end
 
 local function handleFinishSwitch(player, object, args, aborted)

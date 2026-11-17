@@ -94,5 +94,7 @@
     "IGUI_WLM_DiagnosticLogs": "Diagnostic logs",
     "IGUI_WLM_Recovering": "Storage failed. Restoring your equipment...",
     "IGUI_WLM_RecoveryComplete": "Your previous equipment has been restored.",
-    "IGUI_WLM_RecoveryIncomplete": "Equipment recovery was incomplete. Check your inventory and wardrobe."
+    "IGUI_WLM_RecoveryIncomplete": "Equipment recovery was incomplete. Check your inventory and wardrobe.",
+    "IGUI_WLM_Merge": "Merge",
+    "IGUI_WLM_MergeTip": "Add this set to your current equipment and empty its slot. Conflicting items stay in your inventory."
 }

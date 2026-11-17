@@ -94,5 +94,7 @@
     "IGUI_WLM_DiagnosticLogs": "Logs de diagnóstico",
     "IGUI_WLM_Recovering": "Falha ao guardar. Restaurando seu equipamento...",
     "IGUI_WLM_RecoveryComplete": "Seu equipamento anterior foi restaurado.",
-    "IGUI_WLM_RecoveryIncomplete": "Não foi possível recuperar todo o equipamento. Confira seu inventário e o móvel."
+    "IGUI_WLM_RecoveryIncomplete": "Não foi possível recuperar todo o equipamento. Confira seu inventário e o móvel.",
+    "IGUI_WLM_Merge": "Mesclar",
+    "IGUI_WLM_MergeTip": "Adiciona este conjunto ao equipamento atual e esvazia o slot. Itens substituídos ficam no inventário."
 }

@@ -15,6 +15,7 @@ A local mod for Project Zomboid Build 42.22.2 that stores equipment sets in ward
 - Use fixed slots, including empty ones, without manually creating or naming loadouts. **Swap** equips a slot and stores your current equipment in it; **Take** equips the slot and empties it. Items are moved as their original inventory instances, never copied.
 - Keep slots in the wardrobe's mod data. Existing loadouts are assigned stable slots automatically, and an already worn legacy loadout can be stored in its existing slot.
 - Use the slot definitions loaded by the game when restoring equipment, including slots added by other mods.
+- **Merge** adds a stored set to your current equipment and empties its slot. Equipment in other clothing locations, unspecified hands, and other attachment slots stays equipped. Incoming items take priority when positions conflict; displaced items stay in your inventory. Failed operations use the existing equipment recovery flow.
 
 ## Local installation
 

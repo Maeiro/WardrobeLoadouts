@@ -677,7 +677,7 @@ local function currentWorn(player)
     return found
 end
 
-local function enqueueSwitch(player, active, target, wardrobe, preferences)
+local function enqueueSwitch(player, active, target, wardrobe, preferences, merge)
     if ISTimedActionQueue.queues[player] and #ISTimedActionQueue.queues[player].queue > 0 then
         return false, WLM.text("IGUI_WLM_ErrorBusy", "Finish the current action before switching loadouts.")
     end
@@ -699,6 +699,7 @@ local function enqueueSwitch(player, active, target, wardrobe, preferences)
         wardrobe = wardrobe,
         object = Client.object,
         preferences = preferences or WLM.clientPreferences(),
+        merge = merge == true,
     }
     pending.recovery = { kind = "switch", player = player, profile = captureProfile(player, "previous"), items = {}, returnItems = {} }
     local originalIds = {}
@@ -729,7 +730,7 @@ local function enqueueSwitch(player, active, target, wardrobe, preferences)
     temporarilyUnfavorite(player, wardrobe, profiles, pending)
 
     local attachedToRemove = {}
-    if WLM.settings().includeAttachments and hotbar then
+    if not merge and WLM.settings().includeAttachments and hotbar then
         for _, item in pairs(hotbar.attachedItems or {}) do
             if item and item:getAttachedSlot() >= 0 then
                 attachedToRemove[#attachedToRemove + 1] = item
@@ -752,7 +753,7 @@ local function enqueueSwitch(player, active, target, wardrobe, preferences)
 
     local currentlyWorn = currentWorn(player)
     for _, entry in ipairs(currentlyWorn) do
-        if not isBandageItem(entry.item) and not (not WLM.settings().includeBags and isWearableBag(entry.item))
+        if not merge and not isBandageItem(entry.item) and not (not WLM.settings().includeBags and isWearableBag(entry.item))
                 and not profileHasRole(target, entry.item:getID(), "worn") then
             addAction(player, ISUnequipAction:new(player, entry.item, perAction, "place"), perAction)
         end
@@ -765,7 +766,7 @@ local function enqueueSwitch(player, active, target, wardrobe, preferences)
             addAction(player, ISUnequipAction:new(player, item, perAction, "place"), perAction)
         end
     end
-    if WLM.settings().includeHands then
+    if not merge and WLM.settings().includeHands then
         unequipHand(player:getPrimaryHandItem(), "hand:primary")
         unequipHand(player:getSecondaryHandItem(), "hand:secondary")
     end
@@ -853,7 +854,9 @@ local function enqueueReplacedItems(player, pending)
     return operations
 end
 
-function Client.beginSwitch(targetId, slotAction, swap)
+function Client.beginSwitch(targetId, slotAction, swap, merge)
+    merge = merge == true
+    if merge then slotAction, swap = true, false end
     if not Client.object then return end
     if Client.switchPendingRequest or Client.pendingSwitch or Client.pendingStoreRequest or Client.pendingStore then return end
     local player = getPlayer(Client.playerNum)
@@ -877,6 +880,7 @@ function Client.beginSwitch(targetId, slotAction, swap)
     args.preferences = preferences
     args.activeId = activeId
     args.targetId = tostring(targetId)
+    args.merge = merge
     if slotAction and WLM.isSetActive(data, targetId) then
         Client.showError(WLM.text("IGUI_WLM_ErrorSetActive", "This equipment is currently being used by a player."))
         return
@@ -921,7 +925,7 @@ function Client.beginSwitch(targetId, slotAction, swap)
         Client.showError(WLM.text("IGUI_WLM_ErrorCapacity", "The wardrobe needs more free capacity for this switch."))
         return
     end
-    local ok, message = enqueueSwitch(player, active, target, container, preferences)
+    local ok, message = enqueueSwitch(player, active, target, container, preferences, merge)
     if not ok then Client.showError(message); return end
     Client.switchObjectArgs = args
     Client.pendingSwitch.slotAction = slotAction == true
@@ -937,7 +941,7 @@ function Client.restoreAttachments(player, entries, operation)
     hotbar.wornItems = nil
     hotbar:refresh()
     local previous = hotbar.availableSlot or {}
-    local ordered = WLM.orderAttachmentSlots(previous, entries)
+    local ordered = not operation.merge and WLM.orderAttachmentSlots(previous, entries)
     if ordered then
         for index, item in pairs(hotbar.attachedItems or {}) do
             for newIndex, slot in ipairs(ordered) do
@@ -997,6 +1001,16 @@ function Client.restoreAttachments(player, entries, operation)
                 model = hotbar.replacements[attachmentType]
             end
             if model ~= "null" then
+                if operation.merge then
+                    local replaced = hotbar.attachedItems[chosenIndex]
+                    if replaced and replaced ~= item then
+                        hotbar:removeItem(replaced, false)
+                        syncItemState(player, replaced)
+                    end
+                    if item:getAttachedSlot() >= 0 and item:getAttachedSlot() ~= chosenIndex then
+                        hotbar:removeItem(item, false)
+                    end
+                end
                 hotbar:attachItem(item, model or entry.model, chosenIndex, chosenSlot.def, false)
                 syncItemState(player, item)
             else
@@ -1356,7 +1370,7 @@ function Client.open(object, playerNum)
     local uiScale = WLM.Options and WLM.Options.uiScale and WLM.Options.uiScale() or 1
     local window = Client.window
     local hasCurrentControls = window and window.closeButton and window.list and window.saveButton
-        and window.updateButton and window.deleteButton and window.applyButton and window.saveDialog
+        and window.updateButton and window.deleteButton and window.mergeButton and window.applyButton and window.saveDialog
         and window.saveDialog.nameEntry and window.saveDialog.cancelButton and window.saveDialog.saveButton
         and window.slotInterface == 6 and window.iconButton and window.scaleUpButton and window.infoButton
         and window.groupLists and window.groupLists.clothes
@@ -1476,8 +1490,9 @@ local function onServerCommand(module, command, args)
         Client.switchObjectArgs.activeId = tostring(args.activeId)
         Client.switchObjectArgs.targetId = tostring(args.targetId)
         Client.switchObjectArgs.slotAction = args.slotAction
+        Client.switchObjectArgs.merge = args.merge == true
         Client.switchObjectArgs.preferences = args.preferences or WLM.clientPreferences()
-        local ok, message = enqueueSwitch(getPlayer(Client.playerNum), active, target, container, Client.switchObjectArgs.preferences)
+        local ok, message = enqueueSwitch(getPlayer(Client.playerNum), active, target, container, Client.switchObjectArgs.preferences, args.merge == true)
         if not ok then
             local abortArgs = WLM.objectArgs(Client.object)
             abortArgs.targetId = tostring(args.targetId)

@@ -269,8 +269,9 @@ function ISWardrobeLoadoutsUI:createChildren()
     self.saveButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_StoreSlot", "Store in slot"), self, ISWardrobeLoadoutsUI.storeSelected)
     self.updateButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_Rename", "Rename"), self, ISWardrobeLoadoutsUI.openRenameDialog)
     self.deleteButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_TakeSlot", "Take"), self, ISWardrobeLoadoutsUI.takeSelected)
+    self.mergeButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_Merge", "Merge"), self, ISWardrobeLoadoutsUI.mergeSelected)
     self.applyButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_SwapSlot", "Swap"), self, ISWardrobeLoadoutsUI.applySelected)
-    for _, button in ipairs({ self.saveButton, self.updateButton, self.deleteButton, self.applyButton }) do
+    for _, button in ipairs({ self.saveButton, self.updateButton, self.deleteButton, self.mergeButton, self.applyButton }) do
         button:initialise()
         setButtonStyle(button, button == self.applyButton)
         self:addChild(button)
@@ -376,6 +377,10 @@ function ISWardrobeLoadoutsUI:layoutChildren()
     self.deleteButton:setY(self.applyButton.y)
     self.deleteButton:setWidth(takeW)
     self.deleteButton:setHeight(34 * scale)
+    self.mergeButton:setX(self.deleteButton.x - 10 * scale - takeW)
+    self.mergeButton:setY(self.applyButton.y)
+    self.mergeButton:setWidth(takeW)
+    self.mergeButton:setHeight(34 * scale)
     self.updateButton:setX(self.detailX + 120 * scale)
     self.updateButton:setY(91 * scale)
     self.updateButton:setWidth(96 * scale)
@@ -555,6 +560,8 @@ function ISWardrobeLoadoutsUI:refresh()
     self.updateButton:setTitle(text("IGUI_WLM_Rename", "Rename"))
     self.iconButton:setTitle(text("IGUI_WLM_Icon", "Icon"))
     self.deleteButton:setTitle(text("IGUI_WLM_TakeSlot", "Take"))
+    self.mergeButton:setTitle(text("IGUI_WLM_Merge", "Merge"))
+    self.mergeButton.tooltip = text("IGUI_WLM_MergeTip", "Add this set to your current equipment and empty its slot. Conflicting items stay in your inventory.")
     self.saveDialog.cancelButton:setTitle(text("IGUI_WLM_Cancel", "Cancel"))
     self.saveDialog.saveButton:setTitle(text("IGUI_WLM_Confirm", "Confirm"))
     self.saveButton.tooltip = text("IGUI_WLM_StoreTip", "Move your current equipment into the selected empty slot.")
@@ -627,6 +634,7 @@ function ISWardrobeLoadoutsUI:updatePreview()
     self.applyButton:setTitle(profile and not active and text("IGUI_WLM_SwapLoadout", "Swap loadout") or text("IGUI_WLM_StoreSlot", "Store"))
     self.applyButton:setEnable(usable and not foreignActive and preview.missing == 0 and (profile ~= nil or preview.store > 0))
     self.deleteButton:setEnable(usable and profile ~= nil and not active and not foreignActive and preview.missing == 0)
+    self.mergeButton:setEnable(self.deleteButton.enable)
     self.saveButton:setEnable(usable and (not profile or active) and current ~= nil and #WLM.profileItems(current) > 0)
     if not profile or active then self.applyButton:setEnable(self.saveButton.enable) end
     self.applyButton.tooltip = (not profile or active) and self.saveButton.tooltip or text("IGUI_WLM_SwapTip", "Equip this set and store your current equipment in the same slot.")
@@ -678,6 +686,10 @@ end
 
 function ISWardrobeLoadoutsUI:takeSelected()
     if self.deleteButton.enable and self.selectedId then WLM.Client.beginSwitch(self.selectedId, true, false) end
+end
+
+function ISWardrobeLoadoutsUI:mergeSelected()
+    if self.mergeButton.enable and self.selectedId then WLM.Client.beginSwitch(self.selectedId, true, false, true) end
 end
 
 function ISWardrobeLoadoutsUI:setMessage(message, isError)
