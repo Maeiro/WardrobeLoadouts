@@ -1,10 +1,7 @@
 {
     "Sandbox_WardrobeLoadouts": "Wardrobe Loadouts",
-    "Sandbox_WardrobeLoadoutsMaxLoadouts": "Maximum loadouts per wardrobe",
+    "Sandbox_WardrobeLoadoutsMaxLoadouts": "Maximum loadout slots per furniture",
     "Sandbox_WardrobeLoadoutsSwitchDuration": "Switch duration (seconds; 0 is instant)",
-    "Sandbox_WardrobeLoadoutsStorageCapacity": "Wardrobe capacity for loadout storage (maximum 100)",
-    "Sandbox_WardrobeLoadoutsIncludeHands": "Save and switch hand items",
-    "Sandbox_WardrobeLoadoutsIncludeBags": "Save and switch wearable bags",
-    "Sandbox_WardrobeLoadoutsIncludeAttachments": "Save and restore belt, holster, and other attached items",
-    "Sandbox_WardrobeLoadoutsIncludeKeyRing": "Store and restore the character's key ring"
+    "Sandbox_WardrobeLoadoutsCapacityBonusPercent": "Furniture storage capacity bonus (%)",
+    "Sandbox_WardrobeLoadoutsCapacityPerSlot": "Storage capacity required per loadout slot"
 }

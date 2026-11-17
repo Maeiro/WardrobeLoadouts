@@ -44,22 +44,22 @@ To release the mouse while using Viewpoint cameras, restart the game once after 
 5. Double-click an empty slot to store your equipment, or an occupied slot to swap loadouts. A single click only selects a slot.
 6. Select a slot to inspect its item icons and order before acting. The buttons apply to the selected slot. **Rename**, beside the title, changes the slot name, including for empty slots; the name persists after taking or swapping a loadout. Hover over **?** for settings guidance.
 
-Hover over an item to see its full name. Missing items appear in red and prevent a swap until they are available. The number of slots follows the existing Sandbox option, which defaults to 12. Reducing the limit does not hide already stored loadouts. In multiplayer, slots are shared and only change after the server verifies the item transfer.
+Hover over an item to see its full name. Missing items appear in red and prevent a swap until they are available. The number of empty slots is based on the furniture's combined native capacity, the configured bonus, and the capacity required per slot. Existing loadouts remain visible if a Sandbox change lowers the calculated limit. In multiplayer, slots are shared and only change after the server verifies the item transfer.
 
 ## Configuration
 
 Sandbox options are shared and should be set by the host or server:
 
-- **Maximum loadouts per wardrobe**: 1–24, default 12.
+- **Maximum loadout slots per furniture**: 1–24, default 12; this is a ceiling on the capacity-based slot count.
 - **Switch duration**: 0–10 seconds, default 0.
-- **Wardrobe capacity for loadout storage**: capacity 50–100, default 100.
-- **Save and switch hand items**: includes both hands, enabled by default.
-- **Save and switch wearable bags**: includes worn bags, enabled by default.
-- **Save and restore belt, holster, and other attached items**: saves attached equipment slots, enabled by default.
+- **Furniture storage capacity bonus**: 0–100%, default 25%; applied to the furniture's native capacity.
+- **Storage capacity required per loadout slot**: 1–50, default 10; the available slot count is the combined effective capacity divided by this value, rounded down and capped by the maximum.
 
-When a category is disabled, loadouts ignore it and leave the current equipment as is. Previously saved items in a category are included again if the option is re-enabled; loadouts stored while it is disabled do not capture those items.
+With two native 25-capacity wardrobe modules, the default bonus produces about 63 total capacity after Project Zomboid's integer capacity rounding, allowing 6 slots at the default 10 capacity per slot. The bonus is applied to each module while distributing rounding across the furniture.
 
-Under **Options → Mods → Wardrobe Loadouts**, adjust the interface scale and language. Language can follow the game automatically or be selected from EN, ES, FR, DE, IT, PT, PT-BR, RU, CN, UA, KO, JP, and TR. The **- / +** buttons beside **?** adjust the scale in 5% steps and save the client preference.
+Under **Options → Mods → Wardrobe Loadouts**, adjust the interface scale, language, and personal equipment categories. **Save and switch hand items**, **Save and switch wearable bags**, **Save and restore belt, holster, and other attached items**, and **Save and restore the character's key ring** are client options, enabled by default. When a category is disabled, loadouts leave that equipment as is; previously stored items in that category remain in the slot and are included again if the option is re-enabled. Loadouts saved while a category is disabled do not capture it.
+
+Language can follow the game automatically or be selected from EN, ES, FR, DE, IT, PT, PT-BR, RU, CN, UA, KO, JP, and TR. The **- / +** buttons beside **?** adjust the interface scale in 5% steps and save the client preference.
 
 **Diagnostic logs** are off by default and can be toggled without restarting. When enabled, they record store and swap details and cursor status, and monitor for 20 seconds to see whether items return to the furniture after a swap. This monitoring does not run while diagnostics are off. Player-facing error messages remain available either way.
 
@@ -67,7 +67,7 @@ The language selector uses English names and codes so it remains readable with a
 
 The **Icon** button beside **Rename** opens a searchable catalogue of loaded item icons, including modded items. It also accepts the name or path of another texture available in the game. **Automatic** restores the icon chosen from the slot's contents. Slot names and icons remain after taking a loadout.
 
-Parts of the same piece of furniture share loadouts, item lookup, and the configured storage limit. They are linked using the native sprite grid and the object's internal containers; nearby furniture is not grouped by distance. Physical containers and item transfers remain game-managed. Existing loadouts from both parts are preserved, with IDs and slots remapped when needed.
+Parts of the same piece of furniture share loadouts, item lookup, and the configured capacity bonus. Their native capacities are combined to determine the total storage limit and slot count. They are linked using the native sprite grid and the object's internal containers; nearby furniture is not grouped by distance. Physical containers and item transfers remain game-managed. Existing loadouts from both parts are preserved, with IDs and slots remapped when needed.
 
 Viewpoint API 1.0 does not document a dedicated loot-panel button registration. Access uses `OnFillWorldObjectContextMenu` with the furniture itself as the explicit target, which the installed Viewpoint interaction collector recognizes. Releasing the cursor uses the optional Java addon described above; Viewpoint and Smarter Storage are not required to use the wardrobe manager.
 

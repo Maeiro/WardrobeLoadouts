@@ -30,14 +30,36 @@ end
 
 function WLM.settings()
     local options = SandboxVars and SandboxVars.WardrobeLoadouts or {}
+    local preferences = WLM.Options and WLM.Options.preferences and WLM.Options.preferences() or {}
     return {
         maxLoadouts = math.max(1, math.min(24, tonumber(options.MaxLoadouts) or 12)),
         switchDuration = math.max(0, math.min(10, tonumber(options.SwitchDuration) or 0)),
-        storageCapacity = math.max(50, math.min(100, tonumber(options.StorageCapacity) or 100)),
-        includeHands = options.IncludeHands ~= false,
-        includeBags = options.IncludeBags ~= false,
-        includeAttachments = options.IncludeAttachments ~= false,
-        includeKeyRing = options.IncludeKeyRing ~= false,
+        capacityBonusPercent = math.max(0, math.min(100, tonumber(options.CapacityBonusPercent) or 25)),
+        capacityPerSlot = math.max(1, math.min(50, tonumber(options.CapacityPerSlot) or 10)),
+        includeHands = preferences.includeHands ~= false,
+        includeBags = preferences.includeBags ~= false,
+        includeAttachments = preferences.includeAttachments ~= false,
+        includeKeyRing = preferences.includeKeyRing ~= false,
+    }
+end
+
+function WLM.normalizePreferences(preferences)
+    preferences = type(preferences) == "table" and preferences or {}
+    return {
+        includeHands = preferences.includeHands ~= false,
+        includeBags = preferences.includeBags ~= false,
+        includeAttachments = preferences.includeAttachments ~= false,
+        includeKeyRing = preferences.includeKeyRing ~= false,
+    }
+end
+
+function WLM.clientPreferences()
+    local settings = WLM.settings()
+    return {
+        includeHands = settings.includeHands,
+        includeBags = settings.includeBags,
+        includeAttachments = settings.includeAttachments,
+        includeKeyRing = settings.includeKeyRing,
     }
 end
 
@@ -149,9 +171,9 @@ local function mergeStorageData(owner, parts)
                 data = other
                 ownerModData[WLM.DATA_KEY] = data
             else
-                WLM.slots(data)
-                WLM.slots(other)
-                local usedSlots = WLM.slots(data)
+                WLM.slots(data, owner:getContainer())
+                WLM.slots(other, part:getContainer())
+                local usedSlots = WLM.slots(data, owner:getContainer())
                 data.nextId = tonumber(data.nextId) or 1
                 local movedSlots = {}
                 local ids = {}
@@ -174,7 +196,12 @@ local function mergeStorageData(owner, parts)
                     data.slotIcons[tostring(slot)] = other.slotIcons and other.slotIcons[tostring(oldSlot)]
                     data.activeByPlayer = data.activeByPlayer or {}
                     for playerKey, activeId in pairs(other.activeByPlayer or {}) do
-                        if tostring(activeId) == oldId and not data.activeByPlayer[playerKey] then data.activeByPlayer[playerKey] = id end
+                        if tostring(activeId) == oldId and not data.activeByPlayer[playerKey] then
+                            data.activeByPlayer[playerKey] = id
+                            data.activePreferencesByPlayer = data.activePreferencesByPlayer or {}
+                            data.activePreferencesByPlayer[playerKey] = other.activePreferencesByPlayer
+                                and other.activePreferencesByPlayer[playerKey]
+                        end
                     end
                 end
                 local metadataSlots = {}
@@ -234,7 +261,8 @@ function WLM.getData(object, create)
         data.slotNames = type(data.slotNames) == "table" and data.slotNames or {}
         data.slotIcons = type(data.slotIcons) == "table" and data.slotIcons or {}
         data.activeByPlayer = type(data.activeByPlayer) == "table" and data.activeByPlayer or {}
-        WLM.slots(data)
+        data.activePreferencesByPlayer = type(data.activePreferencesByPlayer) == "table" and data.activePreferencesByPlayer or {}
+        WLM.slots(data, object:getContainer())
     end
     return data
 end
@@ -252,12 +280,24 @@ function WLM.getActiveId(data, player)
     return data.activeByPlayer and data.activeByPlayer[WLM.activeKey(player)]
 end
 
-function WLM.setActiveId(data, player, setId)
+function WLM.setActiveId(data, player, setId, preferences)
     if not data then return end
     data.activeByPlayer = type(data.activeByPlayer) == "table" and data.activeByPlayer or {}
     local key = WLM.activeKey(player)
-    if setId == nil then data.activeByPlayer[key] = nil else data.activeByPlayer[key] = tostring(setId) end
+    data.activePreferencesByPlayer = type(data.activePreferencesByPlayer) == "table" and data.activePreferencesByPlayer or {}
+    if setId == nil then
+        data.activeByPlayer[key] = nil
+        data.activePreferencesByPlayer[key] = nil
+    else
+        data.activeByPlayer[key] = tostring(setId)
+        data.activePreferencesByPlayer[key] = WLM.normalizePreferences(preferences or WLM.clientPreferences())
+    end
     data.activeId = data.activeByPlayer[key]
+end
+
+function WLM.getActivePreferences(data, player)
+    return data and data.activePreferencesByPlayer
+        and data.activePreferencesByPlayer[WLM.activeKey(player)] or WLM.clientPreferences()
 end
 
 function WLM.getSet(data, setId)
@@ -273,8 +313,8 @@ function WLM.isBandageEntry(entry)
     return string.find(string.lower(tostring(entry.bodyLocation or "")), "bandage", 1, true) ~= nil
 end
 
-function WLM.profileItems(profile)
-    local settings = WLM.settings()
+function WLM.profileItems(profile, preferences)
+    local settings = preferences and WLM.normalizePreferences(preferences) or WLM.settings()
     local found, seen = {}, {}
     local function add(entry)
         local id = type(entry) == "table" and tonumber(entry.id) or nil
@@ -297,8 +337,8 @@ function WLM.profileItems(profile)
     return found
 end
 
-function WLM.profileRoles(profile)
-    local settings = WLM.settings()
+function WLM.profileRoles(profile, preferences)
+    local settings = preferences and WLM.normalizePreferences(preferences) or WLM.settings()
     local roles = {}
     local function add(entry, role)
         local id = type(entry) == "table" and tonumber(entry.id) or nil
@@ -384,17 +424,107 @@ function WLM.itemWeight(item)
     return ok and math.max(0, tonumber(weight) or 0) or 0
 end
 
-function WLM.capacity(container)
-    if not container then return end
-    local limit = WLM.settings().storageCapacity
-    for _, current in ipairs(WLM.storageContainers(container)) do
-        pcall(function() current:setCapacity(limit) end)
+WLM.nativeCapacityCache = WLM.nativeCapacityCache or setmetatable({}, { __mode = "k" })
+
+local function nativeCapacity(current)
+    local value = WLM.nativeCapacityCache[current]
+    if value ~= nil then return value end
+    local object
+    pcall(function() object = current:getParent() end)
+    local containerType
+    pcall(function() containerType = current:getType() end)
+    local containerIndex = -1
+    pcall(function() containerIndex = object and object:getContainerIndex(current) or -1 end)
+    if containerIndex < 0 and object and object.getContainerCount and object.getContainerByIndex then
+        local count = 0
+        pcall(function() count = object:getContainerCount() end)
+        for index = 0, math.min(count, 8) - 1 do
+            local ok, candidate = pcall(function() return object:getContainerByIndex(index) end)
+            if ok and candidate == current then containerIndex = index; break end
+        end
     end
+    local modData
+    pcall(function() modData = object and object:getModData() end)
+    local capacityData = modData and modData[WLM.ID .. "NativeCapacities"]
+    if type(capacityData) == "table" then
+        value = tonumber(capacityData[tostring(containerIndex)])
+        if value then WLM.nativeCapacityCache[current] = value; return value end
+    end
+    local propertyName = containerType == "freezer" and "FreezerCapacity" or "ContainerCapacity"
+    local propertyCapacity
+    pcall(function()
+        local sprite = object and object:getSprite()
+        local properties = sprite and sprite:getProperties()
+        propertyCapacity = properties and tonumber(properties:get(propertyName))
+    end)
+    if propertyCapacity then
+        value = propertyCapacity
+    else
+        local ok, currentCapacity = pcall(function() return current:getCapacity() end)
+        value = ok and tonumber(currentCapacity) or nil
+        if containerType == "freezer" then
+            value = propertyCapacity or 15
+        elseif storageTypes[containerType] then
+            local legacyCapacity = tonumber(SandboxVars and SandboxVars.WardrobeLoadouts
+                and SandboxVars.WardrobeLoadouts.StorageCapacity) or 100
+            if value == legacyCapacity then value = 50 end
+        end
+    end
+    if value then
+        WLM.nativeCapacityCache[current] = value
+        if modData then
+            capacityData = type(capacityData) == "table" and capacityData or {}
+            capacityData[tostring(containerIndex)] = value
+            modData[WLM.ID .. "NativeCapacities"] = capacityData
+        end
+    end
+    return value
 end
 
-function WLM.slots(data)
+function WLM.capacity(container)
+    if not container then return nil end
+    local settings = WLM.settings()
+    local records, exactTotal, floorTotal = {}, 0, 0
+    for _, current in ipairs(WLM.storageContainers(container)) do
+        local base = nativeCapacity(current)
+        if base then
+            local exact = base * (1 + settings.capacityBonusPercent / 100)
+            local roundedDown = math.floor(exact)
+            records[#records + 1] = { container = current, capacity = roundedDown, fraction = exact - roundedDown }
+            exactTotal = exactTotal + exact
+            floorTotal = floorTotal + roundedDown
+        end
+    end
+    if #records == 0 then return nil end
+    local remaining = math.floor(exactTotal + 0.5) - floorTotal
+    table.sort(records, function(left, right) return left.fraction > right.fraction end)
+    for index = 1, remaining do records[index].capacity = records[index].capacity + 1 end
+    local total = 0
+    for _, record in ipairs(records) do
+        local ok = pcall(function() record.container:setCapacity(record.capacity) end)
+        if ok then
+            total = total + record.capacity
+        else
+            pcall(function() total = total + record.container:getCapacity() end)
+        end
+    end
+    return total
+end
+
+function WLM.capacityLimit(container)
+    return WLM.capacity(container) or math.huge
+end
+
+function WLM.slotLimit(container)
+    local settings = WLM.settings()
+    local capacity = WLM.capacityLimit(container)
+    if not capacity then return settings.maxLoadouts end
+    return math.min(settings.maxLoadouts, math.floor(capacity / settings.capacityPerSlot))
+end
+
+function WLM.slots(data, container)
     local slots, pending = {}, {}
-    local count = WLM.settings().maxLoadouts
+    local count = WLM.slotLimit(container)
     for id, profile in pairs(data and data.sets or {}) do
         pending[#pending + 1] = { id = tostring(id), profile = profile }
     end
@@ -424,13 +554,6 @@ function WLM.slots(data)
             entry.profile.name = data.slotNames[key]
         end
     end
-    local metadataSlots = {}
-    for slot in pairs(data and data.slotNames or {}) do metadataSlots[slot] = true end
-    for slot in pairs(data and data.slotIcons or {}) do metadataSlots[slot] = true end
-    for slot in pairs(metadataSlots) do
-        local number = tonumber(slot)
-        if number and number >= 1 and number <= 1000 and number == math.floor(number) then count = math.max(count, number) end
-    end
     return slots, count
 end
 
@@ -439,27 +562,49 @@ function WLM.slotName(data, slot)
         or WLM.text("IGUI_WLM_Slot", "Slot") .. " " .. tostring(slot)
 end
 
-function WLM.setSlotName(data, slot, name)
+function WLM.setSlotName(data, slot, name, container)
     slot = tonumber(slot)
     if not data or not slot or slot < 1 or slot ~= math.floor(slot) then return false end
-    local slots, count = WLM.slots(data)
+    local slots, count = WLM.slots(data, container)
     if slot > count or type(name) ~= "string" or #name < 1 or #name > 64 then return false end
     data.slotNames[tostring(slot)] = name
     if slots[slot] then slots[slot].profile.name = name end
     return true
 end
 
-function WLM.slotAvailable(data, slot)
+function WLM.slotAvailable(data, slot, container)
     slot = tonumber(slot)
-    if not slot or slot ~= math.floor(slot) or slot < 1 or slot > WLM.settings().maxLoadouts then return false end
-    local slots = WLM.slots(data)
+    if not slot or slot ~= math.floor(slot) or slot < 1 or slot > WLM.slotLimit(container) then return false end
+    local slots = WLM.slots(data, container)
     return slots[slot] == nil
 end
 
-function WLM.completeSlotSwitch(data, player, targetId, replacement)
+function WLM.preserveUnselectedCategories(profile, previous, preferences)
+    if not profile or not previous then return profile end
+    preferences = WLM.normalizePreferences(preferences or WLM.clientPreferences())
+    if not preferences.includeHands then profile.hands = previous.hands end
+    if not preferences.includeAttachments then profile.attached = previous.attached end
+    if not preferences.includeKeyRing then profile.keyRing = previous.keyRing end
+    if not preferences.includeBags then
+        local seen = {}
+        for _, entry in ipairs(profile.worn or {}) do seen[tonumber(entry.id)] = true end
+        for _, entry in ipairs(previous.worn or {}) do
+            if entry.isBag == true and not seen[tonumber(entry.id)] then
+                profile.worn[#profile.worn + 1] = entry
+            end
+        end
+    end
+    return profile
+end
+
+function WLM.completeSlotSwitch(data, player, targetId, replacement, preferences)
+    preferences = WLM.normalizePreferences(preferences or WLM.clientPreferences())
     local activeId = WLM.getActiveId(data, player)
     if activeId and tostring(activeId) ~= tostring(targetId) then data.sets[tostring(activeId)] = nil end
-    if replacement and #WLM.profileItems(replacement) > 0 then
+    WLM.preserveUnselectedCategories(replacement, data.sets[tostring(targetId)], preferences)
+    local hasItems = replacement and (#(replacement.worn or {}) > 0 or #(replacement.attached or {}) > 0
+        or replacement.keyRing ~= nil or next(replacement.hands or {}) ~= nil)
+    if replacement and hasItems then
         replacement.name = WLM.slotName(data, replacement.slot)
         replacement.id = tostring(targetId)
         replacement.savedAt = getTimestamp()

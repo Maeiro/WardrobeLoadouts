@@ -1,5 +1,9 @@
 {
     "IGUI_WLM_Title": "Conjuntos do Guarda-Roupa",
+    "IGUI_WLM_IncludeHands": "Salvar e trocar itens nas mãos",
+    "IGUI_WLM_IncludeBags": "Salvar e trocar bolsas vestidas",
+    "IGUI_WLM_IncludeAttachments": "Salvar e restaurar itens em cintos, coldres e outros slots",
+    "IGUI_WLM_IncludeKeyRing": "Guardar e restaurar o chaveiro do personagem",
     "IGUI_WLM_Open": "Gerenciar conjuntos",
     "IGUI_WLM_Sets": "CONJUNTOS",
     "IGUI_WLM_Details": "EQUIPAMENTO",

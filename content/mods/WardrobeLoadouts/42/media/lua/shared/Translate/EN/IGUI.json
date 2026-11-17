@@ -1,5 +1,9 @@
 {
     "IGUI_WLM_Title": "Wardrobe Loadouts",
+    "IGUI_WLM_IncludeHands": "Save and switch hand items",
+    "IGUI_WLM_IncludeBags": "Save and switch wearable bags",
+    "IGUI_WLM_IncludeAttachments": "Save and restore belt, holster, and other attached items",
+    "IGUI_WLM_IncludeKeyRing": "Save and restore the character's key ring",
     "IGUI_WLM_Open": "Manage Loadouts",
     "IGUI_WLM_Sets": "LOADOUTS",
     "IGUI_WLM_Details": "EQUIPMENT",

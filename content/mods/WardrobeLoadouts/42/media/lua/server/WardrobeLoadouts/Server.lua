@@ -92,7 +92,7 @@ local function clearStoredActiveProfile(player, object, data)
     local profile = activeId and data.sets[tostring(activeId)]
     if not profile then return false end
     local wardrobe = object:getContainer()
-    for _, id in ipairs(WLM.profileItems(profile)) do
+    for _, id in ipairs(WLM.profileItems(profile, WLM.getActivePreferences(data, player))) do
         if not playerItem(player, id) and WLM.findItem(wardrobe, id) then
             WLM.setActiveId(data, player, nil)
             object:transmitModData()
@@ -131,11 +131,11 @@ local function handleBeginStore(player, object, args)
         fail(player, "Only the active loadout can be updated.", "IGUI_WLM_ErrorUpdateActive")
         return
     end
-    if not updateId and profile.slot and not WLM.slotAvailable(data, profile.slot) then
+    if not updateId and profile.slot and not WLM.slotAvailable(data, profile.slot, object:getContainer()) then
         fail(player, "This slot is no longer empty. Refresh the wardrobe.", "IGUI_WLM_ErrorSlotOccupied")
         return
     end
-    if not updateId and WLM.countSets(data) >= WLM.settings().maxLoadouts then
+    if not updateId and WLM.countSets(data) >= WLM.slotLimit(object:getContainer()) then
         fail(player, "This wardrobe has reached its loadout limit.", "IGUI_WLM_ErrorLimit")
         return
     end
@@ -149,7 +149,7 @@ local function handleBeginStore(player, object, args)
     local container = object:getContainer()
     local usedWeight = 0
     pcall(function() usedWeight = WLM.storageWeight(container) end)
-    if usedWeight + storeCapacityDelta(player, container, profile) > WLM.settings().storageCapacity then
+    if usedWeight + storeCapacityDelta(player, container, profile) > WLM.capacityLimit(container) then
         fail(player, "The wardrobe needs more free capacity before storing this equipment.", "IGUI_WLM_ErrorCapacity")
         return
     end
@@ -183,11 +183,11 @@ local function handleFinishStore(player, object, args)
         reject("Only the active loadout can be updated.", "IGUI_WLM_ErrorUpdateActive")
         return
     end
-    if not updateId and profile.slot and not WLM.slotAvailable(data, profile.slot) then
+    if not updateId and profile.slot and not WLM.slotAvailable(data, profile.slot, object:getContainer()) then
         reject("This slot is no longer empty. Refresh the wardrobe.", "IGUI_WLM_ErrorSlotOccupied")
         return
     end
-    if not updateId and WLM.countSets(data) >= WLM.settings().maxLoadouts then
+    if not updateId and WLM.countSets(data) >= WLM.slotLimit(object:getContainer()) then
         reject("This wardrobe has reached its loadout limit.", "IGUI_WLM_ErrorLimit")
         return
     end
@@ -199,7 +199,7 @@ local function handleFinishStore(player, object, args)
     end
     local usedWeight = 0
     pcall(function() usedWeight = WLM.storageWeight(object:getContainer()) end)
-    if usedWeight > WLM.settings().storageCapacity then
+    if usedWeight > WLM.capacityLimit(object:getContainer()) then
         reject("The wardrobe is over its configured capacity; the loadout was not saved.", "IGUI_WLM_ErrorCapacity")
         return
     end
@@ -241,6 +241,7 @@ local function handleBeginSwitch(player, object, args)
         return
     end
     local data = WLM.getData(object, false)
+    local preferences = WLM.normalizePreferences(args.preferences)
     local targetId = tostring(args.targetId or "")
     local activeId = tostring(args.activeId or "")
     local target = data and data.sets[targetId]
@@ -264,19 +265,19 @@ local function handleBeginSwitch(player, object, args)
             return
         end
         active = args.swapProfile
-        local slots = WLM.slots(data)
+        local slots = WLM.slots(data, object:getContainer())
         for slot, entry in pairs(slots) do if entry.id == targetId then active.slot = slot; break end end
     end
     local container = object:getContainer()
     if active then
-        for _, id in ipairs(WLM.profileItems(active)) do
+        for _, id in ipairs(WLM.profileItems(active, preferences)) do
             if not playerItem(player, id) then
                 fail(player, "The active loadout is incomplete. Update it before switching.", "IGUI_WLM_ErrorActiveIncomplete")
                 return
             end
         end
     end
-    for _, id in ipairs(WLM.profileItems(target)) do
+    for _, id in ipairs(WLM.profileItems(target, preferences)) do
         if not findItemAnywhere(player, container, id) then
             fail(player, "A piece from the selected loadout is missing.", "IGUI_WLM_ErrorMissingPiece")
             return
@@ -284,8 +285,8 @@ local function handleBeginSwitch(player, object, args)
     end
 
     local activeIds, targetIds = {}, {}
-    for _, id in ipairs(WLM.profileItems(active)) do activeIds[id] = true end
-    for _, id in ipairs(WLM.profileItems(target)) do targetIds[id] = true end
+    for _, id in ipairs(WLM.profileItems(active, preferences)) do activeIds[id] = true end
+    for _, id in ipairs(WLM.profileItems(target, preferences)) do targetIds[id] = true end
     local capacityDelta = 0
     for id in pairs(activeIds) do
         if not targetIds[id] then capacityDelta = capacityDelta + WLM.itemWeight(playerItem(player, id)) end
@@ -298,7 +299,7 @@ local function handleBeginSwitch(player, object, args)
     end
     local usedWeight = 0
     pcall(function() usedWeight = WLM.storageWeight(container) end)
-    if usedWeight + capacityDelta > WLM.settings().storageCapacity then
+    if usedWeight + capacityDelta > WLM.capacityLimit(container) then
         fail(player, "The wardrobe needs more free capacity for this switch.", "IGUI_WLM_ErrorCapacity")
         return
     end
@@ -306,9 +307,9 @@ local function handleBeginSwitch(player, object, args)
     data.lock = player:getOnlineID()
     data.lockUntil = getTimestamp() + LOCK_SECONDS
     object:transmitModData()
-    slotSwitches[object] = args.slotAction and { player = player, targetId = targetId, profile = active } or nil
+    slotSwitches[object] = args.slotAction and { player = player, targetId = targetId, profile = active, preferences = preferences } or nil
     send(player, "switchReady", { targetId = targetId, activeId = activeId,
-        slotAction = args.slotAction == true, swapProfile = args.slotAction and active or nil })
+        slotAction = args.slotAction == true, swapProfile = args.slotAction and active or nil, preferences = preferences })
 end
 
 local function handleFinishSwitch(player, object, args, aborted)
@@ -316,6 +317,8 @@ local function handleFinishSwitch(player, object, args, aborted)
     if not data or data.lock ~= player:getOnlineID() then return end
     if not aborted then
         local targetId = tostring(args.targetId or "")
+        local slotSwitch = slotSwitches[object]
+        local preferences = WLM.normalizePreferences(args.preferences or (slotSwitch and slotSwitch.preferences))
         local target = data.sets[targetId]
         if not target then
             data.lock = nil
@@ -323,7 +326,7 @@ local function handleFinishSwitch(player, object, args, aborted)
             object:transmitModData()
             return
         end
-        for _, id in ipairs(WLM.profileItems(target)) do
+        for _, id in ipairs(WLM.profileItems(target, preferences)) do
             if not playerItem(player, id) then
                 data.lock = nil
                 data.lockUntil = nil
@@ -332,9 +335,8 @@ local function handleFinishSwitch(player, object, args, aborted)
                 return
             end
         end
-        local slotSwitch = slotSwitches[object]
         if slotSwitch and slotSwitch.player == player and slotSwitch.targetId == targetId then
-            for _, id in ipairs(WLM.profileItems(slotSwitch.profile)) do
+            for _, id in ipairs(WLM.profileItems(slotSwitch.profile, preferences)) do
                 if not WLM.findItem(object:getContainer(), id) then
                     data.lock, data.lockUntil = nil, nil
                     slotSwitches[object] = nil
@@ -344,9 +346,9 @@ local function handleFinishSwitch(player, object, args, aborted)
                     return
                 end
             end
-            WLM.completeSlotSwitch(data, player, targetId, slotSwitch.profile)
+            WLM.completeSlotSwitch(data, player, targetId, slotSwitch.profile, preferences)
         else
-            WLM.setActiveId(data, player, targetId)
+            WLM.setActiveId(data, player, targetId, preferences)
         end
     end
     slotSwitches[object] = nil
@@ -383,7 +385,7 @@ local function onClientCommand(module, command, player, args)
     elseif command == "icon" then
         local data = WLM.getData(object, false)
         local slot, icon = tonumber(args.slot), args.icon
-        local _, count = WLM.slots(data)
+        local _, count = WLM.slots(data, object:getContainer())
         if not data or not slot or slot < 1 or slot ~= math.floor(slot) or slot > count then return end
         if type(icon) ~= "string" or #icon > 250 or icon:find("..", 1, true) or icon:find("[\r\n]") then return end
         if data.lock and (data.lockUntil or 0) > getTimestamp() then return end
@@ -396,7 +398,7 @@ local function onClientCommand(module, command, player, args)
         local profile = data and data.sets[tostring(args.setId or "")]
         local name = type(args.name) == "string" and args.name:gsub("^%s+", ""):gsub("%s+$", "") or ""
         local slot = tonumber(args.slot) or (profile and profile.slot)
-        local _, slotCount = WLM.slots(data)
+        local _, slotCount = WLM.slots(data, object:getContainer())
         if not data or not slot or slot < 1 or slot ~= math.floor(slot) or slot > slotCount then return end
         if #name == 0 or #name > 64 then
             fail(player, "Loadout names must be 1 to 64 bytes long.", "IGUI_WLM_ErrorNameLength")
@@ -406,7 +408,7 @@ local function onClientCommand(module, command, player, args)
             fail(player, "This wardrobe is being used by another player.", "IGUI_WLM_ErrorLocked")
             return
         end
-        WLM.setSlotName(data, slot, name)
+        WLM.setSlotName(data, slot, name, object:getContainer())
         object:transmitModData()
         publishState(player, object, data)
     elseif command == "delete" then

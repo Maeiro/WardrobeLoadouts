@@ -453,7 +453,7 @@ function ISWardrobeLoadoutsUI:render()
     local reachColor = self.inReach and { r = 0.36, g = 0.80, b = 0.46 } or { r = 0.95, g = 0.42, b = 0.35 }
     self:drawText(reachText, reachX, 28 * scale, reachColor.r, reachColor.g, reachColor.b, 1, UIFont.Small)
     self:drawText(text("IGUI_WLM_Sets", "LOADOUTS"), 18 * scale, 94 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
-    self:drawText(tostring(WLM.countSets(data)) .. " / " .. tostring(WLM.settings().maxLoadouts), self.sidebarW - 50 * scale, 94 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
+    self:drawText(tostring(WLM.countSets(data)) .. " / " .. tostring(WLM.slotLimit(WLM.Client.object:getContainer())), self.sidebarW - 50 * scale, 94 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
     local title = WLM.slotName(data, self.selectedSlot or 1)
     local titleWidth = math.max(0, self.updateButton.x - self.detailX - 12 * scale)
     self:drawText(fitText(title, UIFont.Medium, titleWidth), self.detailX, 94 * scale, colors.text.r, colors.text.g, colors.text.b, 1, UIFont.Medium)
@@ -566,7 +566,7 @@ function ISWardrobeLoadoutsUI:refresh()
     local data = WLM.Client.data or WLM.Client.getData()
     local player = getSpecificPlayer(WLM.Client.playerNum)
     local activeId = WLM.getActiveId(data, player)
-    local slots, count = WLM.slots(data)
+    local slots, count = WLM.slots(data, WLM.Client.object:getContainer())
     for slot = 1, count do
         self.list:addItem("", { slot = slot, id = slots[slot] and slots[slot].id }, WLM.slotName(data, slot))
     end

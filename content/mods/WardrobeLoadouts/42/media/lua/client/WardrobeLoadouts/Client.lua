@@ -268,8 +268,8 @@ function Client.getData()
     return WLM.getData(Client.object, false)
 end
 
-local function firstStoredProfileItem(player, wardrobe, profile)
-    for _, id in ipairs(WLM.profileItems(profile)) do
+local function firstStoredProfileItem(player, wardrobe, profile, preferences)
+    for _, id in ipairs(WLM.profileItems(profile, preferences)) do
         local item = WLM.findItem(wardrobe, id)
         if item then return item end
     end
@@ -289,7 +289,7 @@ local function clearStoredActiveProfile(player, object, data)
     local profile = activeId and data.sets[tostring(activeId)]
     if not profile then return false end
     local wardrobe = object:getContainer()
-    local item = firstStoredProfileItem(player, wardrobe, profile)
+    local item = firstStoredProfileItem(player, wardrobe, profile, WLM.getActivePreferences(data, player))
     if item then
         local itemName = WLM.nameForItem(item)
         WLM.debugLog(string.format("[WardrobeLoadouts] active loadout cleared: item still in wardrobe name=%s id=%s",
@@ -470,7 +470,10 @@ function Client.saveProfile(profile, updateId)
         Client.showError(WLM.text("IGUI_WLM_ErrorUpdateActive", "Only the active loadout can be updated."))
         return false
     end
-    if not updateId and profile.slot and not WLM.slotAvailable(data, profile.slot) then
+    if updateId then
+        WLM.preserveUnselectedCategories(profile, data.sets[tostring(updateId)], WLM.clientPreferences())
+    end
+    if not updateId and profile.slot and not WLM.slotAvailable(data, profile.slot, Client.object:getContainer()) then
         Client.showError(WLM.text("IGUI_WLM_ErrorSlotOccupied", "This slot is no longer empty. Refresh the wardrobe."))
         return false
     end
@@ -478,7 +481,7 @@ function Client.saveProfile(profile, updateId)
         Client.showError(WLM.text("IGUI_WLM_ErrorNoEquipment", "There is no equipment to store."))
         return false
     end
-    if not updateId and WLM.countSets(data) >= WLM.settings().maxLoadouts then
+    if not updateId and WLM.countSets(data) >= WLM.slotLimit(Client.object:getContainer()) then
         Client.showError(WLM.text("IGUI_WLM_ErrorLimit", "This wardrobe has reached its loadout limit."))
         return false
     end
@@ -489,7 +492,7 @@ function Client.saveProfile(profile, updateId)
         end
     end
     WLM.capacity(wardrobe)
-    if WLM.storageWeight(wardrobe) + storageWeightDelta(player, wardrobe, profile) > WLM.settings().storageCapacity then
+    if WLM.storageWeight(wardrobe) + storageWeightDelta(player, wardrobe, profile) > WLM.capacityLimit(wardrobe) then
         Client.showError(WLM.text("IGUI_WLM_ErrorCapacity", "The wardrobe needs more free capacity before storing this equipment."))
         return false
     end
@@ -528,7 +531,7 @@ function Client.renameProfile(setId, value, slot)
     local data = Client.data or WLM.getData(Client.object, false)
     local profile = data and data.sets[tostring(setId)]
     slot = tonumber(slot) or (profile and profile.slot)
-    local _, slotCount = WLM.slots(data)
+    local _, slotCount = WLM.slots(data, Client.object:getContainer())
     if not data or not slot or slot < 1 or slot ~= math.floor(slot) or slot > slotCount then return false end
     if data.lock and (data.lockUntil or 0) > getTimestamp() then
         Client.showError(WLM.text("IGUI_WLM_ErrorLocked", "Another player is using this wardrobe."))
@@ -540,7 +543,7 @@ function Client.renameProfile(setId, value, slot)
     if isClient() then
         sendClientCommand(getPlayer(Client.playerNum), WLM.ID, "rename", args)
     else
-        WLM.setSlotName(data, slot, name)
+        WLM.setSlotName(data, slot, name, Client.object:getContainer())
         if Client.object.transmitModData then Client.object:transmitModData() end
         if Client.window then Client.window:refresh() end
     end
@@ -551,7 +554,7 @@ function Client.setSlotIcon(slot, icon)
     if not Client.object or Client.pendingStore or Client.pendingSwitch or Client.pendingStoreRequest or Client.switchPendingRequest then return false end
     local data = Client.data or WLM.getData(Client.object, false)
     slot = tonumber(slot)
-    local _, count = WLM.slots(data)
+    local _, count = WLM.slots(data, Client.object:getContainer())
     if not data or not slot or slot < 1 or slot ~= math.floor(slot) or slot > count then return false end
     if type(icon) ~= "string" or #icon > 250 or icon:find("..", 1, true) or icon:find("[\r\n]") then return false end
     if data.lock and (data.lockUntil or 0) > getTimestamp() then return false end
@@ -636,7 +639,7 @@ local function currentWorn(player)
     return found
 end
 
-local function enqueueSwitch(player, active, target, wardrobe)
+local function enqueueSwitch(player, active, target, wardrobe, preferences)
     if ISTimedActionQueue.queues[player] and #ISTimedActionQueue.queues[player].queue > 0 then
         return false, WLM.text("IGUI_WLM_ErrorBusy", "Finish the current action before switching loadouts.")
     end
@@ -656,6 +659,7 @@ local function enqueueSwitch(player, active, target, wardrobe)
         phase = "equipping",
         perAction = perAction,
         wardrobe = wardrobe,
+        preferences = preferences or WLM.clientPreferences(),
     }
     if type(print) == "function" then
         WLM.debugLog(string.format("[WardrobeLoadouts] switch begin active=%s target=%s activeItems=%d targetItems=%d",
@@ -808,6 +812,8 @@ function Client.beginSwitch(targetId, slotAction, swap)
     end
     local args = WLM.objectArgs(Client.object)
     if not args then return end
+    local preferences = WLM.clientPreferences()
+    args.preferences = preferences
     args.activeId = activeId
     args.targetId = tostring(targetId)
     if slotAction and WLM.isSetActive(data, targetId) then
@@ -815,7 +821,7 @@ function Client.beginSwitch(targetId, slotAction, swap)
         return
     end
     if slotAction then
-        local slots = WLM.slots(data)
+        local slots = WLM.slots(data, Client.object:getContainer())
         local slot
         for index, entry in pairs(slots) do if entry.id == tostring(targetId) then slot = index; break end end
         active = swap and captureProfile(player, target.name) or { name = target.name, worn = {}, attached = {}, hands = {} }
@@ -850,11 +856,11 @@ function Client.beginSwitch(targetId, slotAction, swap)
     for _, id in ipairs(WLM.profileItems(target)) do
         if not inventoryItem(player, id) and not WLM.findItem(container, id) then Client.showError(WLM.text("IGUI_WLM_ErrorMissingPiece", "A piece from the selected loadout is missing.")); return end
     end
-    if WLM.storageWeight(container) + profileWeightDelta(player, container, active, target) > WLM.settings().storageCapacity then
+    if WLM.storageWeight(container) + profileWeightDelta(player, container, active, target) > WLM.capacityLimit(container) then
         Client.showError(WLM.text("IGUI_WLM_ErrorCapacity", "The wardrobe needs more free capacity for this switch."))
         return
     end
-    local ok, message = enqueueSwitch(player, active, target, container)
+    local ok, message = enqueueSwitch(player, active, target, container, preferences)
     if not ok then Client.showError(message); return end
     Client.switchObjectArgs = args
     Client.pendingSwitch.slotAction = slotAction == true
@@ -987,8 +993,8 @@ function Client.finishSwitch(success, message)
         if data then
             data.lock, data.lockUntil = nil, nil
             if success then
-                if pending.slotAction then WLM.completeSlotSwitch(data, player, targetId, pending.activeProfile)
-                else WLM.setActiveId(data, player, targetId) end
+                if pending.slotAction then WLM.completeSlotSwitch(data, player, targetId, pending.activeProfile, pending.preferences)
+                else WLM.setActiveId(data, player, targetId, pending.preferences) end
             end
         end
         if Client.object and Client.object.transmitModData then Client.object:transmitModData() end
@@ -1004,7 +1010,7 @@ local function saveStoredProfile(player, pending)
     if updateId and (not data.sets[updateId] or WLM.getActiveId(data, player) ~= updateId) then
         return false, WLM.text("IGUI_WLM_ErrorUpdateActive", "Only the active loadout can be updated.")
     end
-    if not updateId and WLM.countSets(data) >= WLM.settings().maxLoadouts then
+    if not updateId and WLM.countSets(data) >= WLM.slotLimit(object:getContainer()) then
         return false, WLM.text("IGUI_WLM_ErrorLimit", "This wardrobe has reached its loadout limit.")
     end
     for _, id in ipairs(WLM.profileItems(pending.profile)) do
@@ -1012,7 +1018,7 @@ local function saveStoredProfile(player, pending)
             return false, WLM.text("IGUI_WLM_ErrorStoreIncomplete", "Some items could not be moved into the wardrobe; the loadout was not saved.")
         end
     end
-    if not updateId and pending.profile.slot and not WLM.slotAvailable(data, pending.profile.slot) then
+    if not updateId and pending.profile.slot and not WLM.slotAvailable(data, pending.profile.slot, object:getContainer()) then
         return false, WLM.text("IGUI_WLM_ErrorSlotOccupied", "This slot is no longer empty. Refresh the wardrobe.")
     end
     local id = updateId or tostring(data.nextId)
@@ -1226,7 +1232,8 @@ local function onServerCommand(module, command, args)
         Client.switchObjectArgs.activeId = tostring(args.activeId)
         Client.switchObjectArgs.targetId = tostring(args.targetId)
         Client.switchObjectArgs.slotAction = args.slotAction
-        local ok, message = enqueueSwitch(getPlayer(Client.playerNum), active, target, container)
+        Client.switchObjectArgs.preferences = args.preferences or WLM.clientPreferences()
+        local ok, message = enqueueSwitch(getPlayer(Client.playerNum), active, target, container, Client.switchObjectArgs.preferences)
         if not ok then
             local abortArgs = WLM.objectArgs(Client.object)
             abortArgs.targetId = tostring(args.targetId)

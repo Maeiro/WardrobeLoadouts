@@ -20,44 +20,22 @@ option WardrobeLoadouts.SwitchDuration
     translation = WardrobeLoadoutsSwitchDuration,
 }
 
-option WardrobeLoadouts.StorageCapacity
+option WardrobeLoadouts.CapacityBonusPercent
 {
     type = integer,
-    min = 50,
+    min = 0,
     max = 100,
-    default = 100,
+    default = 25,
     page = WardrobeLoadouts,
-    translation = WardrobeLoadoutsStorageCapacity,
+    translation = WardrobeLoadoutsCapacityBonusPercent,
 }
 
-option WardrobeLoadouts.IncludeHands
+option WardrobeLoadouts.CapacityPerSlot
 {
-    type = boolean,
-    default = true,
+    type = integer,
+    min = 1,
+    max = 50,
+    default = 10,
     page = WardrobeLoadouts,
-    translation = WardrobeLoadoutsIncludeHands,
-}
-
-option WardrobeLoadouts.IncludeBags
-{
-    type = boolean,
-    default = true,
-    page = WardrobeLoadouts,
-    translation = WardrobeLoadoutsIncludeBags,
-}
-
-option WardrobeLoadouts.IncludeAttachments
-{
-    type = boolean,
-    default = true,
-    page = WardrobeLoadouts,
-    translation = WardrobeLoadoutsIncludeAttachments,
-}
-
-option WardrobeLoadouts.IncludeKeyRing
-{
-    type = boolean,
-    default = true,
-    page = WardrobeLoadouts,
-    translation = WardrobeLoadoutsIncludeKeyRing,
+    translation = WardrobeLoadoutsCapacityPerSlot,
 }

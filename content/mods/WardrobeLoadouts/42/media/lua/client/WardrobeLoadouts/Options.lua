@@ -48,6 +48,32 @@ local function registerOptions()
     if not options:getOption("DiagnosticLogs") then
         options:addTickBox("DiagnosticLogs", label("IGUI_WLM_DiagnosticLogs", "Diagnostic logs"), false)
     end
+    local clientOptions = {
+        { id = "IncludeHands", key = "IGUI_WLM_IncludeHands", fallback = "Save and switch hand items" },
+        { id = "IncludeBags", key = "IGUI_WLM_IncludeBags", fallback = "Save and switch wearable bags" },
+        { id = "IncludeAttachments", key = "IGUI_WLM_IncludeAttachments", fallback = "Save and restore attached items" },
+        { id = "IncludeKeyRing", key = "IGUI_WLM_IncludeKeyRing", fallback = "Save and restore the key ring" },
+    }
+    local sandboxOptions = SandboxVars and SandboxVars.WardrobeLoadouts or {}
+    for _, entry in ipairs(clientOptions) do
+        if not options:getOption(entry.id) then
+            options:addTickBox(entry.id, label(entry.key, entry.fallback), sandboxOptions[entry.id] ~= false)
+        end
+    end
+end
+
+local function preferenceEnabled(id)
+    local option = options and options:getOption(id)
+    return not option or option:getValue() == true
+end
+
+function WLM.Options.preferences()
+    return {
+        includeHands = preferenceEnabled("IncludeHands"),
+        includeBags = preferenceEnabled("IncludeBags"),
+        includeAttachments = preferenceEnabled("IncludeAttachments"),
+        includeKeyRing = preferenceEnabled("IncludeKeyRing"),
+    }
 end
 
 function WLM.Options.diagnosticsEnabled()
