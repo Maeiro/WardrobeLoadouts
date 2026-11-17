@@ -91,5 +91,8 @@
     "IGUI_WLM_SharedStorage": "Shared storage",
     "IGUI_WLM_SwapLoadout": "Swap loadout",
     "IGUI_WLM_OutOfReach": "OUT OF REACH",
-    "IGUI_WLM_DiagnosticLogs": "Diagnostic logs"
+    "IGUI_WLM_DiagnosticLogs": "Diagnostic logs",
+    "IGUI_WLM_Recovering": "Storage failed. Restoring your equipment...",
+    "IGUI_WLM_RecoveryComplete": "Your previous equipment has been restored.",
+    "IGUI_WLM_RecoveryIncomplete": "Equipment recovery was incomplete. Check your inventory and wardrobe."
 }

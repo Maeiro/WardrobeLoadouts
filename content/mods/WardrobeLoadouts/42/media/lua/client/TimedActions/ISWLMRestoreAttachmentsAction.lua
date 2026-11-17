@@ -13,13 +13,14 @@ function ISWLMRestoreAttachmentsAction:update()
 end
 
 function ISWLMRestoreAttachmentsAction:perform()
-    WardrobeLoadouts.Client.restoreAttachments(self.character, self.entries)
+    WardrobeLoadouts.Client.restoreAttachments(self.character, self.entries, self.operation)
     ISBaseTimedAction.perform(self)
 end
 
-function ISWLMRestoreAttachmentsAction:new(character, entries, durationFrames)
+function ISWLMRestoreAttachmentsAction:new(character, entries, durationFrames, operation)
     local action = ISBaseTimedAction.new(self, character)
     action.entries = entries or {}
+    action.operation = operation
     action.maxTime = durationFrames
     action.stopOnWalk = false
     action.stopOnRun = false

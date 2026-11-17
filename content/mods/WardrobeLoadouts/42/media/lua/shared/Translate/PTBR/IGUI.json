@@ -91,5 +91,8 @@
     "IGUI_WLM_SharedStorage": "Armazenamento compartilhado",
     "IGUI_WLM_SwapLoadout": "Trocar conjunto",
     "IGUI_WLM_OutOfReach": "FORA DE ALCANCE",
-    "IGUI_WLM_DiagnosticLogs": "Logs de diagnóstico"
+    "IGUI_WLM_DiagnosticLogs": "Logs de diagnóstico",
+    "IGUI_WLM_Recovering": "Falha ao guardar. Restaurando seu equipamento...",
+    "IGUI_WLM_RecoveryComplete": "Seu equipamento anterior foi restaurado.",
+    "IGUI_WLM_RecoveryIncomplete": "Não foi possível recuperar todo o equipamento. Confira seu inventário e o móvel."
 }

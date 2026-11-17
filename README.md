@@ -75,7 +75,7 @@ Viewpoint API 1.0 does not document a dedicated loot-panel button registration. 
 
 The mod does not depend on specific slot names: restoration checks the slots available after equipping the loadout. This lets Alice's Weapon Sling, Vanilla Gear Expanded, Simple Flashlight on Belt, and Swap It use their own slot registrations. Each mod combination still needs in-game verification.
 
-The mod does not duplicate items, create Lua network files, or modify other mods. If an action is interrupted or a slot is unavailable for an item, the items remain in the inventory or wardrobe and the swap is marked incomplete. Correct the equipment manually before retrying.
+The mod does not duplicate items, create Lua network files, or modify other mods. Before storing equipment, it plans transfers across the furniture's compartments and refuses the operation if the full set cannot fit. If storage fails after transfers begin, it attempts to retrieve the original items and restore the previous clothing, hand items, attachment positions, and favorite flags. It checks the result and reports any items that could not be restored. Recovery can also be interrupted or blocked by inaccessible containers; it does not duplicate missing items or report an incomplete recovery as successful. Failed loadout switches remain marked incomplete.
 
 ## In-game checks
 

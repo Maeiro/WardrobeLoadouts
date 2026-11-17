@@ -424,6 +424,43 @@ function WLM.itemWeight(item)
     return ok and math.max(0, tonumber(weight) or 0) or 0
 end
 
+function WLM.planStorage(container, player, items)
+    WLM.capacity(container)
+    local destinations, ordered, transfers = {}, {}, {}
+    for _, current in ipairs(WLM.storageContainers(container)) do
+        if player:canAccessContainer(current) then
+            destinations[#destinations + 1] = {
+                container = current,
+                remaining = current:getEffectiveCapacity(player) - current:getCapacityWeight(),
+            }
+        end
+    end
+    for _, item in ipairs(items) do ordered[#ordered + 1] = item end
+    table.sort(ordered, function(left, right) return WLM.itemWeight(left) > WLM.itemWeight(right) end)
+    local attempts = 0
+    local function assign(index)
+        if index > #ordered then return true end
+        attempts = attempts + 1
+        -- Bound planning work when a heavily fragmented wardrobe cannot fit the set.
+        if attempts > 4096 then return false end
+        local item = ordered[index]
+        local weight = WLM.itemWeight(item)
+        for _, destination in ipairs(destinations) do
+            local current = destination.container
+            if destination.remaining >= weight and current:isItemAllowed(item) and current:hasRoomFor(player, item) then
+                destination.remaining = destination.remaining - weight
+                transfers[index] = { item = item, destination = current }
+                if assign(index + 1) then return true end
+                destination.remaining = destination.remaining + weight
+            end
+        end
+        transfers[index] = nil
+        return false
+    end
+    if not assign(1) then return nil end
+    return transfers
+end
+
 WLM.nativeCapacityCache = WLM.nativeCapacityCache or setmetatable({}, { __mode = "k" })
 
 local function nativeCapacity(current)

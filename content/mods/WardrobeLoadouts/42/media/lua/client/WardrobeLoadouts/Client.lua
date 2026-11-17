@@ -8,6 +8,7 @@ require "TimedActions/ISDetachItemHotbar"
 require "TimedActions/ISWLMRestoreAttachmentsAction"
 require "TimedActions/ISWLMFinalizeSwitchAction"
 require "TimedActions/ISWLMFinalizeStoreAction"
+require "TimedActions/ISWLMFinalizeRecoveryAction"
 
 local WLM = WardrobeLoadouts
 WLM.Client = WLM.Client or {}
@@ -252,6 +253,7 @@ local function registerTidyUpPolicies()
         "ISWLMRestoreAttachmentsAction",
         "ISWLMFinalizeSwitchAction",
         "ISWLMFinalizeStoreAction",
+        "ISWLMFinalizeRecoveryAction",
     }) do
         tidyUp.registerActionPolicy(actionType, { ignore = true })
     end
@@ -380,6 +382,26 @@ local function enqueueStore(player, profile, wardrobe, pending)
         return false, WLM.text("IGUI_WLM_ErrorHotbar", "The hotbar is not ready yet.")
     end
 
+    local items = {}
+    for _, id in ipairs(WLM.profileItems(profile)) do
+        if not WLM.findItem(wardrobe, id) then
+            local item = inventoryItem(player, id)
+            if not item then
+                return false, WLM.text("IGUI_WLM_ErrorMissingInventory", "A saved item is no longer in this character's inventory.")
+            end
+            items[#items + 1] = item
+        end
+    end
+    local transfers = WLM.planStorage(wardrobe, player, items)
+    if not transfers then
+        return false, WLM.text("IGUI_WLM_ErrorCapacity", "The wardrobe needs more free capacity before storing this equipment.")
+    end
+
+    pending.recovery = { profile = captureProfile(player, profile.name), items = {}, player = player }
+    for _, item in ipairs(items) do
+        pending.recovery.items[#pending.recovery.items + 1] = { item = item }
+    end
+
     registerTidyUpPolicies()
 
     temporarilyUnfavorite(player, wardrobe, { profile }, pending)
@@ -423,22 +445,13 @@ local function enqueueStore(player, profile, wardrobe, pending)
             addAction(player, ISUnequipAction:new(player, item, perAction, "place"), perAction)
         end
     end
-    for _, entry in ipairs(profile.worn or {}) do unequip(wornItem(player, entry.id)) end
-    if WLM.settings().includeHands then
-        local primary, secondary = player:getPrimaryHandItem(), player:getSecondaryHandItem()
-        if hands.primary and primary and tonumber(primary:getID()) == tonumber(hands.primary.id) then unequip(primary) end
-        if hands.secondary and secondary and tonumber(secondary:getID()) == tonumber(hands.secondary.id) then unequip(secondary) end
-    end
-
-    for _, id in ipairs(itemIds) do
-        if not WLM.findItem(wardrobe, id) then
-            local item = inventoryItem(player, id)
-            local source = item and item:getContainer()
-            if item and not source then source = player:getInventory() end
-            if item and source and source ~= wardrobe then
-                addAction(player, ISInventoryTransferUtil.newInventoryTransferAction(player, item, source, WLM.destinationContainer(wardrobe, player), perAction), perAction)
-            end
+    for _, transfer in ipairs(transfers) do
+        local item = transfer.item
+        local source = item:getContainer() or player:getInventory()
+        if wornItem(player, item:getID()) or player:getPrimaryHandItem() == item or player:getSecondaryHandItem() == item then
+            unequip(item)
         end
+        addAction(player, ISInventoryTransferUtil.newInventoryTransferAction(player, item, source, transfer.destination, perAction), perAction)
     end
 
     ISTimedActionQueue.add(ISWLMFinalizeStoreAction:new(player, true, nil))
@@ -772,18 +785,21 @@ end
 local function enqueueReplacedItems(player, pending)
     local targetIds = {}
     for _, id in ipairs(WLM.profileItems(pending.profile)) do targetIds[id] = true end
-    local operations = 0
+    local items = {}
     for _, id in ipairs(WLM.profileItems(pending.activeProfile)) do
         if not targetIds[id] then
             local item = inventoryItem(player, id)
-            local source = item and item:getContainer()
-            if item and source and source ~= pending.wardrobe then
-                local action = ISInventoryTransferUtil.newInventoryTransferAction(
-                    player, item, source, WLM.destinationContainer(pending.wardrobe, player), pending.perAction)
-                addAction(player, action, pending.perAction)
-                operations = operations + 1
-            end
+            if item and not WLM.findItem(pending.wardrobe, id) then items[#items + 1] = item end
         end
+    end
+    local transfers = WLM.planStorage(pending.wardrobe, player, items)
+    if not transfers then return nil end
+    local operations = #transfers
+    for _, transfer in ipairs(transfers) do
+        local item = transfer.item
+        local action = ISInventoryTransferUtil.newInventoryTransferAction(
+            player, item, item:getContainer() or player:getInventory(), transfer.destination, pending.perAction)
+        addAction(player, action, pending.perAction)
     end
     if type(print) == "function" then
         WLM.debugLog(string.format("[WardrobeLoadouts] switch replaced-items queued=%d target=%s",
@@ -867,9 +883,11 @@ function Client.beginSwitch(targetId, slotAction, swap)
     if Client.window then Client.window.applyButton:setEnable(false) end
 end
 
-function Client.restoreAttachments(player, entries)
+function Client.restoreAttachments(player, entries, operation)
+    operation = operation or Client.pendingSwitch
+    if not operation then return end
     local hotbar = getPlayerHotbar(player:getPlayerNum())
-    if not hotbar then Client.pendingSwitch.failed = true; return end
+    if not hotbar then operation.failed = true; return end
     hotbar:reloadIcons()
     hotbar.wornItems = nil
     hotbar:refresh()
@@ -925,11 +943,11 @@ function Client.restoreAttachments(player, entries)
                 hotbar:attachItem(item, model or entry.model, chosenIndex, chosenSlot.def, false)
                 syncItemState(player, item)
             else
-                Client.pendingSwitch.failed = true
+                operation.failed = true
                 reportFailure(entry, item, "unsupportedModel")
             end
         else
-            Client.pendingSwitch.failed = true
+            operation.failed = true
             reportFailure(entry, item, item and "slotNotFound" or "itemNotInInventory")
         end
     end
@@ -954,9 +972,12 @@ function Client.finishSwitch(success, message)
     end
     if success and pending.phase == "equipping" then
         pending.phase = "storing"
-        enqueueReplacedItems(player, pending)
-        ISTimedActionQueue.add(ISWLMFinalizeSwitchAction:new(player, true, nil))
-        return
+        if enqueueReplacedItems(player, pending) ~= nil then
+            ISTimedActionQueue.add(ISWLMFinalizeSwitchAction:new(player, true, nil))
+            return
+        end
+        success = false
+        message = WLM.text("IGUI_WLM_ErrorCapacity", "The wardrobe needs more free capacity for this switch.")
     end
     if success and pending.slotAction then
         local targetIds = {}
@@ -1038,12 +1059,91 @@ local function saveStoredProfile(player, pending)
     return true
 end
 
+function Client.recoverStore(pending, message)
+    if not pending or not pending.recovery or pending.phase == "recovering" then return false end
+    local recovery = pending.recovery
+    local player, profile = recovery.player, recovery.profile
+    pending.phase = "recovering"
+    recovery.message = message
+    Client.pendingStoreRequest = false
+    local wardrobe = pending.object and pending.object:getContainer()
+    temporarilyUnfavorite(player, wardrobe, { profile }, pending)
+    local queued = {}
+    local function retrieve(id)
+        if not id then return end
+        if queued[id] then return queued[id] end
+        for _, entry in ipairs(recovery.items) do
+            if tonumber(entry.item:getID()) == tonumber(id) then
+                queued[id] = entry.item
+                local source = entry.item:getContainer()
+                if source and source ~= player:getInventory() then
+                    addAction(player, ISInventoryTransferUtil.newInventoryTransferAction(player, entry.item, source, player:getInventory(), 1), 1)
+                end
+                return entry.item
+            end
+        end
+    end
+    for _, entry in ipairs(profile.worn or {}) do
+        local item = retrieve(entry.id)
+        if item and not wornItem(player, entry.id) then addAction(player, ISWearClothing:new(player, item), 1) end
+    end
+    local hands = profile.hands or {}
+    local primary = hands.primary and retrieve(hands.primary.id)
+    local secondary = hands.secondary and retrieve(hands.secondary.id)
+    local bothHands = hands.primary and hands.secondary and tonumber(hands.primary.id) == tonumber(hands.secondary.id)
+    if primary then addAction(player, ISEquipWeaponAction:new(player, primary, 1, true, bothHands), 1) end
+    if secondary and not bothHands then addAction(player, ISEquipWeaponAction:new(player, secondary, 1, false, false), 1) end
+    for _, entry in ipairs(recovery.items) do retrieve(entry.item:getID()) end
+    addAction(player, ISWLMRestoreAttachmentsAction:new(player, profile.attached or {}, 1, recovery), 1)
+    addAction(player, ISWLMFinalizeRecoveryAction:new(player, pending), 1)
+    if Client.window then Client.window:setMessage(WLM.text("IGUI_WLM_Recovering", "Storage failed. Restoring your equipment..."), true) end
+    return true
+end
+
+function Client.finishStoreRecovery(pending, interrupted)
+    if Client.pendingStore ~= pending or pending.phase ~= "recovering" then return end
+    local recovery = pending.recovery
+    local player, profile = recovery.player, recovery.profile
+    local missing = {}
+    for _, entry in ipairs(recovery.items) do
+        if not inventoryItem(player, entry.item:getID()) then missing[#missing + 1] = WLM.nameForItem(entry.item) end
+    end
+    for _, entry in ipairs(profile.worn or {}) do
+        if not wornItem(player, entry.id) then missing[#missing + 1] = entry.name end
+    end
+    for role, entry in pairs(profile.hands or {}) do
+        local item
+        if role == "primary" then item = player:getPrimaryHandItem() else item = player:getSecondaryHandItem() end
+        if not item or tonumber(item:getID()) ~= tonumber(entry.id) then missing[#missing + 1] = entry.name end
+    end
+    for _, entry in ipairs(profile.attached or {}) do
+        local item = inventoryItem(player, entry.id)
+        if not item or tonumber(item:getAttachedSlot()) ~= tonumber(entry.slotIndex)
+                or tostring(item:getAttachedSlotType()) ~= tostring(entry.slotType) then missing[#missing + 1] = entry.name end
+    end
+    restoreFavorites(pending, player, pending.object and pending.object:getContainer())
+    local args = pending.objectArgs or WLM.objectArgs(pending.object)
+    if isClient() then
+        if args then sendClientCommand(player, WLM.ID, "abortStore", args) end
+    else
+        local data = WLM.getData(pending.object, false)
+        if data then data.lock, data.lockUntil = nil, nil end
+        if pending.object and pending.object.transmitModData then pending.object:transmitModData() end
+    end
+    Client.pendingStore = nil
+    local restored = not interrupted and not recovery.failed and #missing == 0
+    local result = restored and WLM.text("IGUI_WLM_RecoveryComplete", "Your previous equipment has been restored.")
+        or WLM.text("IGUI_WLM_RecoveryIncomplete", "Equipment recovery was incomplete. Check your inventory and wardrobe.")
+    if #missing > 0 then result = result .. " (" .. table.concat(missing, ", ") .. ")" end
+    logOperation("recovery", restored, profile, result)
+    Client.showError((recovery.message or WLM.text("IGUI_WLM_ErrorStoreCancelled", "Storing equipment was cancelled.")) .. " " .. result)
+end
+
 function Client.finishStore(success, message)
     local pending = Client.pendingStore
     if not pending or pending.phase ~= "actions" then return end
     local player = getPlayer(Client.playerNum)
     local wardrobe = pending.object and pending.object:getContainer()
-    restoreFavorites(pending, player, wardrobe)
     if success then
         for _, id in ipairs(WLM.profileItems(pending.profile)) do
             if not WLM.findItem(wardrobe, id) then
@@ -1057,9 +1157,12 @@ function Client.finishStore(success, message)
         end
     end
 
+    if not success and Client.recoverStore(pending, message) then return end
+
     local args = pending.objectArgs or WLM.objectArgs(pending.object)
     if isClient() then
         if success then
+            restoreFavorites(pending, player, wardrobe)
             args.profile = pending.profile
             args.updateId = pending.updateId
             pending.phase = "server"
@@ -1080,6 +1183,7 @@ function Client.finishStore(success, message)
             success = saved
             message = saveError or message
         end
+        if not success and Client.recoverStore(pending, message) then return end
         if not success then logOperation("store", false, pending.profile, message) end
         if not success then
             local data = WLM.getData(pending.object, false)
@@ -1095,6 +1199,7 @@ function Client.finishStore(success, message)
         if Client.window and Client.object == pending.object then Client.window:refresh() end
     end
 
+    restoreFavorites(pending, player, wardrobe)
     Client.pendingStore = nil
     if success then
         if Client.window and Client.object == pending.object then Client.window:setMessage(nil, false); Client.window:refresh() end
@@ -1183,6 +1288,8 @@ local function onServerCommand(module, command, args)
         local pendingSwitch = Client.pendingSwitch
         if pendingStore then logOperation("store", false, pendingStore.profile, args.message or args.messageKey) end
         if pendingSwitch then logOperation("switch", false, pendingSwitch.profile, args.message or args.messageKey) end
+        if pendingStore and pendingStore.phase == "recovering" then return end
+        if pendingStore and Client.recoverStore(pendingStore, WLM.text(args.messageKey, args.message or "The wardrobe request failed.")) then return end
         Client.switchPendingRequest = false
         Client.pendingStoreRequest = false
         Client.pendingStore = nil
@@ -1211,6 +1318,7 @@ local function onServerCommand(module, command, args)
     elseif command == "storeComplete" then
         local pending = Client.pendingStore
         if not pending or pending.phase ~= "server" or not sameObjectArgs(args.object, pending.objectArgs) then return end
+        restoreFavorites(pending, getPlayer(Client.playerNum), pending.object and pending.object:getContainer())
         Client.pendingStore = nil
         Client.pendingStoreRequest = false
         logOperation("store", true, pending.profile)
@@ -1251,6 +1359,11 @@ Events.OnServerCommand.Add(onServerCommand)
 local function monitorPendingStore()
     local pending = Client.pendingStore
     if not pending then return end
+    if pending.phase == "recovering" then
+        local queue = ISTimedActionQueue.queues[pending.recovery.player]
+        if not queue or #queue.queue == 0 then Client.finishStoreRecovery(pending, true) end
+        return
+    end
     if pending.phase ~= "actions" then
         if pending.deadline and getTimestamp() > pending.deadline then
             Client.pendingStore = nil
@@ -1262,28 +1375,7 @@ local function monitorPendingStore()
     local player = getPlayer(Client.playerNum)
     local queue = player and ISTimedActionQueue.queues[player]
     if queue and #queue.queue > 0 then return end
-    local args = pending.objectArgs or WLM.objectArgs(pending.object)
-    restoreFavorites(pending, player, pending.object and pending.object:getContainer())
-    if isClient() then
-        if args then
-            args.updateId = pending.updateId
-            args.restoreActive = true
-            sendClientCommand(player, WLM.ID, "abortStore", args)
-        end
-    else
-        local data = WLM.getData(pending.object, false)
-        if data then
-            if WLM.getActiveId(data, player) then
-                WLM.setActiveId(data, player, nil)
-            end
-            data.lock, data.lockUntil = nil, nil
-            if Client.object == pending.object then Client.data = data end
-        end
-        if pending.object and pending.object.transmitModData then pending.object:transmitModData() end
-    end
-    Client.pendingStore = nil
-    Client.pendingStoreRequest = false
-    Client.showError(WLM.text("IGUI_WLM_ErrorStoreCancelled", "Storing equipment was cancelled."))
+    Client.finishStore(false, WLM.text("IGUI_WLM_ErrorStoreCancelled", "Storing equipment was cancelled."))
 end
 
 Events.OnTick.Add(monitorPendingStore)
