@@ -1,0 +1,63 @@
+VERSION = 1,
+
+option WardrobeLoadouts.MaxLoadouts
+{
+    type = integer,
+    min = 1,
+    max = 24,
+    default = 12,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsMaxLoadouts,
+}
+
+option WardrobeLoadouts.SwitchDuration
+{
+    type = integer,
+    min = 0,
+    max = 10,
+    default = 0,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsSwitchDuration,
+}
+
+option WardrobeLoadouts.StorageCapacity
+{
+    type = integer,
+    min = 50,
+    max = 100,
+    default = 100,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsStorageCapacity,
+}
+
+option WardrobeLoadouts.IncludeHands
+{
+    type = boolean,
+    default = true,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsIncludeHands,
+}
+
+option WardrobeLoadouts.IncludeBags
+{
+    type = boolean,
+    default = true,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsIncludeBags,
+}
+
+option WardrobeLoadouts.IncludeAttachments
+{
+    type = boolean,
+    default = true,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsIncludeAttachments,
+}
+
+option WardrobeLoadouts.IncludeKeyRing
+{
+    type = boolean,
+    default = true,
+    page = WardrobeLoadouts,
+    translation = WardrobeLoadoutsIncludeKeyRing,
+}

@@ -1,0 +1,6 @@
+/build/
+/dist/
+/publish-content/
+/publish.vdf
+__pycache__/
+*.log

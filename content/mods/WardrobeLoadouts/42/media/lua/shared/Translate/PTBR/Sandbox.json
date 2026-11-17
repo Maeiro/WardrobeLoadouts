@@ -1,0 +1,10 @@
+{
+    "Sandbox_WardrobeLoadouts": "Conjuntos do Guarda-Roupa",
+    "Sandbox_WardrobeLoadoutsMaxLoadouts": "Máximo de conjuntos por guarda-roupa",
+    "Sandbox_WardrobeLoadoutsSwitchDuration": "Duração da troca (segundos; 0 é instantâneo)",
+    "Sandbox_WardrobeLoadoutsStorageCapacity": "Capacidade do guarda-roupa para guardar conjuntos (máximo 100)",
+    "Sandbox_WardrobeLoadoutsIncludeHands": "Salvar e trocar itens nas mãos",
+    "Sandbox_WardrobeLoadoutsIncludeBags": "Salvar e trocar bolsas vestidas",
+    "Sandbox_WardrobeLoadoutsIncludeAttachments": "Salvar e restaurar itens em cintos, coldres e outros slots",
+    "Sandbox_WardrobeLoadoutsIncludeKeyRing": "Guardar e restaurar o chaveiro do personagem"
+}

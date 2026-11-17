@@ -1,0 +1,6 @@
+name=Wardrobe Loadouts
+id=WardrobeLoadouts
+modversion=0.1.0
+author=Maeiro
+versionMin=42.22.2
+description=Save and switch exact equipment loadouts at in-game wardrobes.
