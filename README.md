@@ -6,19 +6,19 @@ Source repository: https://github.com/Maeiro/WardrobeLoadouts
 
 Steam Workshop: https://steamcommunity.com/sharedfiles/filedetails/?id=3841263981
 
-Mod local de Project Zomboid Build 42.22.2 que salva conjuntos no próprio guarda-roupa e equipa outro conjunto usando as ações de inventário do jogo.
+A local mod for Project Zomboid Build 42.22.2 that stores equipment sets in wardrobes and equips another set using the game's inventory actions.
 
-## O que ele faz
+## Features
 
-- Abre o gerenciador nos controles do contêiner, no clique direito e nas ações do Viewpoint ao mirar no móvel. Aceita guarda-roupas, cômodas e armários/lockers, incluindo military lockers.
-- Ao guardar o equipamento atual, move as peças capturadas para dentro do guarda-roupa e registra o conjunto. Inclui roupas, bolsas habilitadas, mãos e itens acoplados a slots de cinto/coldre.
-- Exibe slots fixos, inclusive vazios, sem exigir nome ou cadastro manual. **Trocar** equipa o conteúdo do slot e guarda nele o equipamento atual; **Retirar** equipa o conteúdo e libera o slot. Os itens continuam sendo as mesmas instâncias do inventário, sem cópias.
-- Mantém os slots no modData do guarda-roupa. Conjuntos antigos são distribuídos automaticamente em posições estáveis; conjuntos antigos ainda vestidos podem ser guardados pelo mesmo slot.
-- Usa as definições de slots carregadas pelo jogo no momento da troca, incluindo slots adicionados por mods.
+- Open the loadout manager from container controls, the right-click menu, or Viewpoint interactions while aiming at furniture. Supported furniture includes wardrobes, dressers, lockers, and military lockers.
+- Store the current equipment physically inside the wardrobe and save its loadout. Captured equipment includes clothing, enabled wearable bags, hand items, and items attached to belt and holster slots.
+- Use fixed slots, including empty ones, without manually creating or naming loadouts. **Swap** equips a slot and stores your current equipment in it; **Take** equips the slot and empties it. Items are moved as their original inventory instances, never copied.
+- Keep slots in the wardrobe's mod data. Existing loadouts are assigned stable slots automatically, and an already worn legacy loadout can be stored in its existing slot.
+- Use the slot definitions loaded by the game when restoring equipment, including slots added by other mods.
 
-## Instalação local
+## Local installation
 
-Para gerar o pacote, execute `tools/Build.ps1` com JDK 25 e a API 1.0 do Viewpoint. Os parâmetros `-JdkDir` e `-ViewpointApiJar` permitem informar essas instalações; o script usa as instalações locais configuradas quando omitidos. O addon é compilado com `--release 17`, sem incluir as classes da API no JAR. Extraia `dist/WardrobeLoadouts.zip` em `C:\Users\<USUARIO>\Zomboid\Workshop` ou copie a pasta `dist/WardrobeLoadouts` para lá. O resultado deve manter esta estrutura:
+Run `tools/Build.ps1` with JDK 25 and the Viewpoint API 1.0. Use `-JdkDir` and `-ViewpointApiJar` to specify their locations; the script uses configured local installations when omitted. The addon is compiled with `--release 17` and does not bundle API classes. Extract `dist/WardrobeLoadouts.zip` to `C:\Users\<USERNAME>\Zomboid\Workshop` or copy the `dist/WardrobeLoadouts` folder there. Keep this structure:
 
 ```text
 WardrobeLoadouts/
@@ -31,56 +31,56 @@ WardrobeLoadouts/
                 └── media/...
 ```
 
-Ative **Wardrobe Loadouts** no menu Mods. Em multiplayer, instale e ative o pacote no servidor e em todos os clientes. Os dados dos conjuntos ficam no guarda-roupa do mundo, por isso continuam disponíveis depois de reiniciar.
+Enable **Wardrobe Loadouts** in the Mods menu. For multiplayer, install and enable the package on the server and every client. Loadout data is stored in the world's wardrobe and remains after restarting.
 
-Para liberar automaticamente o mouse nas câmeras do Viewpoint, reinicie o jogo uma vez após instalar e ative **Wardrobe Loadouts Cursor** em **Viewpoint → Advanced → Addons**, aprovando as permissões **camera** e **lua**. Esse pequeno addon Java opcional usa o `CursorClaim` da API 1.0. Enquanto a janela estiver aberta, o cursor fica livre e não gira a câmera; ao fechar, o addon libera apenas sua própria solicitação, respeitando outras janelas. Se a janela desaparecer sem fechar normalmente, a solicitação expira após dois segundos sem atualização. O gerenciador Lua funciona também sem esse addon ou sem Viewpoint. Alterações posteriores apenas na UI Lua podem usar o reload do jogo.
+To release the mouse while using Viewpoint cameras, restart the game once after installation and enable **Wardrobe Loadouts Cursor** under **Viewpoint → Advanced → Addons**, then approve the **camera** and **lua** permissions. This small optional Java addon uses the API 1.0 `CursorClaim`. While the manager is open, the mouse is free and will not turn the camera. Closing the manager releases only this addon's claim, preserving other windows' requests. If the manager disappears without closing normally, its claim expires after two seconds without a heartbeat. The Lua manager also works without this addon or Viewpoint. Subsequent Lua-only UI changes can be applied with the game's Lua reload.
 
-## Uso
+## Usage
 
-1. Abra o contêiner de um guarda-roupa e selecione **Gerenciar conjuntos**, inclusive pela interação do Viewpoint.
-2. Selecione um slot vazio e clique em **Guardar** para guardar fisicamente seu equipamento atual. O nome é automático.
-3. Num slot ocupado, use **Trocar** para equipar suas peças e guardar o equipamento atual nesse mesmo slot.
-4. Use **Retirar** para equipar o conteúdo sem guardar o equipamento anterior; as peças substituídas permanecem no inventário e o slot fica vazio.
-5. Um duplo clique no slot vazio guarda seu equipamento; no ocupado, troca os conjuntos. Um clique simples seleciona sem movimentar itens.
-6. Clique no slot para conferir os ícones e a ordem dos itens antes de agir. Os botões operam o slot selecionado. **Renomear**, ao lado do título, muda o nome do slot, inclusive vazio. Esse nome permanece depois de retirar as peças ou trocar de equipamento; **?** informa onde ajustar as opções ao passar o mouse.
+1. Open a wardrobe container and select **Manage Loadouts**, including through Viewpoint interactions.
+2. Select an empty slot and click **Store** to move your current equipment into it. The slot gets a default name.
+3. On an occupied slot, click **Swap** to equip its items and store your current equipment in that same slot.
+4. Click **Take** to equip the slot without storing your previous equipment. Replaced items stay in your inventory and the slot becomes empty.
+5. Double-click an empty slot to store your equipment, or an occupied slot to swap loadouts. A single click only selects a slot.
+6. Select a slot to inspect its item icons and order before acting. The buttons apply to the selected slot. **Rename**, beside the title, changes the slot name, including for empty slots; the name persists after taking or swapping a loadout. Hover over **?** for settings guidance.
 
-Os nomes completos aparecem ao passar o mouse sobre os itens. Itens ausentes aparecem em vermelho e bloqueiam a troca até estarem disponíveis. A quantidade de slots segue a opção Sandbox existente, com padrão de 12. Reduzir o limite não oculta conjuntos já guardados. Em multiplayer, os slots são compartilhados e só mudam depois de o servidor conferir a transferência dos itens.
+Hover over an item to see its full name. Missing items appear in red and prevent a swap until they are available. The number of slots follows the existing Sandbox option, which defaults to 12. Reducing the limit does not hide already stored loadouts. In multiplayer, slots are shared and only change after the server verifies the item transfer.
 
-## Configuração
+## Configuration
 
-As opções Sandbox são compartilhadas e devem ser definidas pelo host/servidor:
+Sandbox options are shared and should be set by the host or server:
 
-- **Maximum loadouts per wardrobe**: 1–24, padrão 12.
-- **Switch duration**: 0–10 segundos, padrão 0.
-- **Wardrobe capacity for loadout storage**: 50–100 de capacidade, padrão 100.
-- **Save and switch hand items**: inclui as duas mãos, padrão ligado.
-- **Save and switch wearable bags**: inclui bolsas vestidas, padrão ligado.
-- **Save and restore belt, holster, and other attached items**: salva os slots de acoplamento, padrão ligado.
+- **Maximum loadouts per wardrobe**: 1–24, default 12.
+- **Switch duration**: 0–10 seconds, default 0.
+- **Wardrobe capacity for loadout storage**: capacity 50–100, default 100.
+- **Save and switch hand items**: includes both hands, enabled by default.
+- **Save and switch wearable bags**: includes worn bags, enabled by default.
+- **Save and restore belt, holster, and other attached items**: saves attached equipment slots, enabled by default.
 
-Quando uma categoria é desligada, os conjuntos ignoram essa categoria e o equipamento atual fica como está. Dados salvos antes de desligá-la voltam a participar das trocas se a opção for reativada; conjuntos gravados enquanto ela estiver desligada não a capturam.
+When a category is disabled, loadouts ignore it and leave the current equipment as is. Previously saved items in a category are included again if the option is re-enabled; loadouts stored while it is disabled do not capture those items.
 
-Em **Options → Mods → Wardrobe Loadouts**, ajuste o tamanho e a linguagem da interface. Há seleção automática pelo idioma do jogo e escolhas independentes para EN, ES, FR, DE, IT, PT, PT-BR, RU, CN, UA, KO, JP e TR. Os botões **- / +** ao lado de **?** ajustam a escala em passos de 5% e salvam a preferência do cliente.
+Under **Options → Mods → Wardrobe Loadouts**, adjust the interface scale and language. Language can follow the game automatically or be selected from EN, ES, FR, DE, IT, PT, PT-BR, RU, CN, UA, KO, JP, and TR. The **- / +** buttons beside **?** adjust the scale in 5% steps and save the client preference.
 
-**Logs de diagnóstico** fica desligado por padrão e pode ser alterado sem reiniciar. Ao ativar, registra detalhes de guardar/trocar equipamento e do cursor, além de acompanhar por 20 segundos se os itens voltam ao móvel depois de uma troca. Desligado, não executa esse acompanhamento. As mensagens de erro exibidas ao jogador continuam disponíveis.
+**Diagnostic logs** are off by default and can be toggled without restarting. When enabled, they record store and swap details and cursor status, and monitor for 20 seconds to see whether items return to the furniture after a swap. This monitoring does not run while diagnostics are off. Player-facing error messages remain available either way.
 
-O seletor usa nomes em inglês e códigos para permanecer legível com a fonte de qualquer idioma do jogo. As traduções da interface ficam em `42/media/lua/shared/Translate/EN/UI.json`, com chaves por idioma, lidas pelo tradutor nativo para preservar Unicode. O PZ 42.22.2 exige arquivos JSON de tradução, como `UI.json`, `IGUI.json` e `Sandbox.json`. Não coloque textos Unicode diretamente nos literais Lua: o compilador desta versão do jogo os corrompe. Depois de adicionar arquivos de tradução, reinicie o jogo para carregá-los; as escolhas de idioma seguintes atualizam a janela aberta sem reiniciar.
+The language selector uses English names and codes so it remains readable with any game font. Interface translations are in `42/media/lua/shared/Translate/EN/UI.json`, with per-language keys read by the game's native translator to preserve Unicode. PZ 42.22.2 requires JSON translation files such as `UI.json`, `IGUI.json`, and `Sandbox.json`. Do not put Unicode text directly in Lua string literals: this game's Lua compiler corrupts it. Restart the game after adding translation files; once loaded, language changes update the open window without restarting.
 
-O botão **Ícone**, ao lado de **Renomear**, abre um catálogo pesquisável de ícones dos itens carregados, incluindo itens de mods. Também aceita o nome ou caminho de outra textura disponível no jogo. **Automático** restaura o ícone escolhido pelo conteúdo do slot. Nome e ícone persistem mesmo depois de retirar o conjunto.
+The **Icon** button beside **Rename** opens a searchable catalogue of loaded item icons, including modded items. It also accepts the name or path of another texture available in the game. **Automatic** restores the icon chosen from the slot's contents. Slot names and icons remain after taking a loadout.
 
-As partes de um mesmo móvel compartilham loadouts, procura de itens e limite configurado de armazenamento. A ligação usa o sprite grid nativo e os contêineres internos do objeto; não agrupa armários apenas por proximidade. Os contêineres físicos e as transferências de itens continuam sendo os do jogo. Conjuntos antigos de ambas as partes são preservados, com remapeamento de IDs e slots quando necessário.
+Parts of the same piece of furniture share loadouts, item lookup, and the configured storage limit. They are linked using the native sprite grid and the object's internal containers; nearby furniture is not grouped by distance. Physical containers and item transfers remain game-managed. Existing loadouts from both parts are preserved, with IDs and slots remapped when needed.
 
-A documentação pública da API 1.0 do Viewpoint não oferece um registro específico de botões no loot panel. O acesso usa `OnFillWorldObjectContextMenu`, com o próprio móvel como alvo explícito, que o coletor de interações do Viewpoint instalado reconhece. A liberação do cursor usa o addon Java opcional descrito acima; não há dependência obrigatória de Viewpoint ou Smarter Storage.
+Viewpoint API 1.0 does not document a dedicated loot-panel button registration. Access uses `OnFillWorldObjectContextMenu` with the furniture itself as the explicit target, which the installed Viewpoint interaction collector recognizes. Releasing the cursor uses the optional Java addon described above; Viewpoint and Smarter Storage are not required to use the wardrobe manager.
 
-## Compatibilidade e limites
+## Compatibility and limitations
 
-O mod não depende de nomes específicos de slots: a restauração consulta os slots disponíveis depois de vestir as peças do conjunto. Isso permite que Alice's Weapon Sling, Vanilla Gear Expanded, Simple Flashlight on Belt e Swap It continuem usando seus próprios registros de slot. A interação real com cada combinação de mods precisa ser conferida no jogo.
+The mod does not depend on specific slot names: restoration checks the slots available after equipping the loadout. This lets Alice's Weapon Sling, Vanilla Gear Expanded, Simple Flashlight on Belt, and Swap It use their own slot registrations. Each mod combination still needs in-game verification.
 
-O mod não duplica itens, não cria arquivos Lua de rede e não modifica os outros mods. Se uma ação for interrompida ou um slot não existir naquele conjunto, as peças ficam no inventário ou no guarda-roupa e a troca permanece marcada como não concluída. Corrija manualmente o equipamento antes de tentar a operação novamente.
+The mod does not duplicate items, create Lua network files, or modify other mods. If an action is interrupted or a slot is unavailable for an item, the items remain in the inventory or wardrobe and the swap is marked incomplete. Correct the equipment manually before retrying.
 
-## Conferência manual no jogo
+## In-game checks
 
-Guarde dois conjuntos distintos, incluindo uma peça em cada mão e um item em coldre/cinto. Confirme que as peças aparecem dentro do guarda-roupa e que o personagem fica sem o equipamento guardado; equipe cada conjunto em sequência e confira a ordem dos itens acoplados. Reinicie o mundo e confirme que nomes e itens persistem. Em multiplayer, repita com dois personagens e confirme que o conjunto ativo de um não altera o do outro. Também confira um item de Alice's Weapon Sling, um slot de cinto do Simple Flashlight on Belt e peças do Vanilla Gear Expanded instalados.
+Store two different loadouts, including one item in each hand and an item in a holster or belt. Confirm that the items move into the wardrobe and that your character is left without the stored equipment. Equip each loadout in turn and check the order of attached items. Restart the world and confirm names and items persist. In multiplayer, repeat with two characters and confirm one character's active set does not affect the other. Also check an Alice's Weapon Sling item, a Simple Flashlight on Belt item, and Vanilla Gear Expanded equipment.
 
-Confira em jogo: abra o gerenciador pelo clique direito e ao mirar no Viewpoint; armazene um conjunto, escolha nome/ícone, retire-o pela outra metade do mesmo móvel e confirme a persistência. Verifique uma cômoda e um locker, os controles de escala e a seleção de idioma nas opções do cliente. A validação automatizada usa superfícies ISUI e entidades simuladas; o alinhamento final e as transferências SP/MP devem ser conferidos no jogo.
+Open the manager from the right-click menu and while aiming through Viewpoint. Store a set, choose its name and icon, take it from the other half of the same furniture, and confirm persistence. Check a dresser and a locker, the scale controls, and language selection in client options. Automated validation uses simulated ISUI surfaces and entities; final alignment and SP/MP transfers need in-game checks.
 
-Com **Wardrobe Loadouts Cursor** ativo, abra o gerenciador em primeira pessoa e mova o mouse: o ponteiro deve navegar pela janela sem girar a câmera. Abra e feche o seletor de ícones; apenas fechar o gerenciador deve devolver o controle da câmera. Confira os botões **- / + / ? / X** em diferentes escalas e o seletor arredondado sem textos da janela principal sobrepostos.
+With **Wardrobe Loadouts Cursor** enabled, open the manager in first person and move the mouse: the pointer should operate the window without turning the camera. Open and close the icon picker; closing the manager should return camera control. Check the **- / + / ? / X** buttons at different scales and confirm the rounded picker has no text bleeding through from the main window.
