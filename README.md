@@ -2,7 +2,8 @@
 
 ![Wardrobe Loadouts preview](preview.gif)
 
-Source repository: https://github.com/Maeiro/WardrobeLoadouts  
+Source repository: https://github.com/Maeiro/WardrobeLoadouts
+
 Steam Workshop: https://steamcommunity.com/sharedfiles/filedetails/?id=3841263981
 
 Mod local de Project Zomboid Build 42.22.2 que salva conjuntos no próprio guarda-roupa e equipa outro conjunto usando as ações de inventário do jogo.
