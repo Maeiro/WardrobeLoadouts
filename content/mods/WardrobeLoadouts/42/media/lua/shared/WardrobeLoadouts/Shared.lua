@@ -417,6 +417,32 @@ function WLM.isSetActive(data, setId)
     return not hasPlayerEntries and tostring(data.activeId or "") == setId
 end
 
+function WLM.orderAttachmentSlots(slots, entries)
+    local ordered, used = {}, {}
+    for _, entry in ipairs(entries or {}) do
+        local index = tonumber(entry.slotIndex)
+        if not index or index < 1 or index > #slots or ordered[index] then return nil end
+        local selected
+        if slots[index] and not used[slots[index]] and tostring(slots[index].slotType) == tostring(entry.slotType) then
+            selected = slots[index]
+        else
+            for _, slot in ipairs(slots) do
+                if not used[slot] and tostring(slot.slotType) == tostring(entry.slotType) then selected = slot; break end
+            end
+        end
+        if not selected then return nil end
+        ordered[index], used[selected] = selected, true
+    end
+    local index = 1
+    for _, slot in ipairs(slots) do
+        if not used[slot] then
+            while ordered[index] do index = index + 1 end
+            ordered[index] = slot
+        end
+    end
+    return ordered
+end
+
 function WLM.itemWeight(item)
     if not item then return 0 end
     local ok, weight = pcall(function() return item:getUnequippedWeight() end)

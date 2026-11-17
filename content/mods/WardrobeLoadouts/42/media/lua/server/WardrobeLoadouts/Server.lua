@@ -1,10 +1,30 @@
 require "WardrobeLoadouts/Shared"
+require "WardrobeLoadouts/CarryGuard"
 
 if not isServer() then return end
 
 local WLM = WardrobeLoadouts
 local LOCK_SECONDS = 90
 local slotSwitches = setmetatable({}, { __mode = "k" })
+local carryOperations = {}
+
+local function beginCarry(player, object)
+    local previous = carryOperations[player]
+    if previous then WLM.CarryGuard.release(previous.token) end
+    carryOperations[player] = { object = object, token = WLM.CarryGuard.begin(player, object:getContainer()) }
+end
+
+Events.OnTick.Add(function()
+    for player, operation in pairs(carryOperations) do
+        local data = WLM.getData(operation.object, false)
+        if data and data.lock == player:getOnlineID() and (data.lockUntil or 0) > getTimestamp() then
+            WLM.CarryGuard.keep(operation.token)
+        else
+            WLM.CarryGuard.release(operation.token)
+            carryOperations[player] = nil
+        end
+    end
+end)
 
 local function send(player, command, args)
     sendServerCommand(player, WLM.ID, command, args or {})
@@ -158,6 +178,7 @@ local function handleBeginStore(player, object, args)
     data.lock = player:getOnlineID()
     data.lockUntil = getTimestamp() + LOCK_SECONDS
     object:transmitModData()
+    beginCarry(player, object)
     send(player, "storeReady", { updateId = updateId or "", object = WLM.objectArgs(object) })
 end
 
@@ -308,6 +329,7 @@ local function handleBeginSwitch(player, object, args)
     data.lockUntil = getTimestamp() + LOCK_SECONDS
     object:transmitModData()
     slotSwitches[object] = args.slotAction and { player = player, targetId = targetId, profile = active, preferences = preferences } or nil
+    beginCarry(player, object)
     send(player, "switchReady", { targetId = targetId, activeId = activeId,
         slotAction = args.slotAction == true, swapProfile = args.slotAction and active or nil, preferences = preferences })
 end
@@ -355,6 +377,7 @@ local function handleFinishSwitch(player, object, args, aborted)
     data.lock = nil
     data.lockUntil = nil
     object:transmitModData()
+    if not aborted then send(player, "switchComplete", { object = WLM.objectArgs(object), targetId = tostring(args.targetId) }) end
     publishState(player, object, data)
 end
 
