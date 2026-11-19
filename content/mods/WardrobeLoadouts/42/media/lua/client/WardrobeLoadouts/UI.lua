@@ -3,6 +3,7 @@ require "ISUI/ISPanel"
 require "ISUI/ISButton"
 require "ISUI/ISScrollingListBox"
 require "ISUI/ISTextEntryBox"
+require "ISUI/ISModalDialog"
 
 local WLM = WardrobeLoadouts
 local colors = {
@@ -45,6 +46,14 @@ local function fitText(value, font, maxWidth)
         index = nextIndex
     end
     return result ~= "" and result .. suffix or ""
+end
+
+local function formatWeight(value)
+    value = math.max(0, tonumber(value) or 0)
+    if value == math.huge or value ~= value then return "—" end
+    local rounded = math.floor(value + 0.5)
+    if math.abs(value - rounded) < 0.05 then return tostring(rounded) end
+    return string.format("%.1f", value)
 end
 
 local function itemTexture(entry, ui)
@@ -271,7 +280,9 @@ function ISWardrobeLoadoutsUI:createChildren()
     self.deleteButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_TakeSlot", "Take"), self, ISWardrobeLoadoutsUI.takeSelected)
     self.mergeButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_Merge", "Merge"), self, ISWardrobeLoadoutsUI.mergeSelected)
     self.applyButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_SwapSlot", "Swap"), self, ISWardrobeLoadoutsUI.applySelected)
-    for _, button in ipairs({ self.saveButton, self.updateButton, self.deleteButton, self.mergeButton, self.applyButton }) do
+    self.removeLoadoutButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_Delete", "Delete"), self, ISWardrobeLoadoutsUI.confirmDeleteSelected)
+    self.repairButton = ISButton:new(0, 0, 100, 30, text("IGUI_WLM_RepairMissing", "Repair"), self, ISWardrobeLoadoutsUI.confirmRepairSelected)
+    for _, button in ipairs({ self.saveButton, self.updateButton, self.deleteButton, self.mergeButton, self.applyButton, self.removeLoadoutButton, self.repairButton }) do
         button:initialise()
         setButtonStyle(button, button == self.applyButton)
         self:addChild(button)
@@ -280,6 +291,8 @@ function ISWardrobeLoadoutsUI:createChildren()
     self.saveButton.tooltip = text("IGUI_WLM_StoreTip", "Move your current equipment into the selected empty slot.")
     self.deleteButton.tooltip = text("IGUI_WLM_TakeTip", "Equip this set and empty its slot. Replaced equipment stays in your inventory.")
     self.applyButton.tooltip = text("IGUI_WLM_SwapTip", "Equip this set and store your current equipment in the same slot.")
+    self.removeLoadoutButton.tooltip = text("IGUI_WLM_DeleteLoadoutTip", "Delete this loadout entry. Items already in the furniture stay there.")
+    self.repairButton.tooltip = text("IGUI_WLM_RepairMissingTip", "Remove only missing item references and keep the rest of this loadout.")
     self.infoButton = ISButton:new(0, 0, 24, 24, "?", self, ISWardrobeLoadoutsUI.showHelp)
     self.infoButton:initialise()
     setButtonStyle(self.infoButton, false)
@@ -381,6 +394,15 @@ function ISWardrobeLoadoutsUI:layoutChildren()
     self.mergeButton:setY(self.applyButton.y)
     self.mergeButton:setWidth(takeW)
     self.mergeButton:setHeight(34 * scale)
+    local utilityW = 100 * scale
+    self.repairButton:setX(self.mergeButton.x - 8 * scale - utilityW)
+    self.repairButton:setY(self.applyButton.y)
+    self.repairButton:setWidth(utilityW)
+    self.repairButton:setHeight(34 * scale)
+    self.removeLoadoutButton:setX(self.repairButton.x - 8 * scale - utilityW)
+    self.removeLoadoutButton:setY(self.applyButton.y)
+    self.removeLoadoutButton:setWidth(utilityW)
+    self.removeLoadoutButton:setHeight(34 * scale)
     self.updateButton:setX(self.detailX + 120 * scale)
     self.updateButton:setY(91 * scale)
     self.updateButton:setWidth(96 * scale)
@@ -454,7 +476,12 @@ function ISWardrobeLoadoutsUI:render()
     local reachText = self.inReach and text("IGUI_WLM_Reach", "IN REACH") or text("IGUI_WLM_OutOfReach", "OUT OF REACH")
     local reachX = self.headerButtonsLeft - textWidth(reachText, UIFont.Small) - 12 * scale
     self:drawText(fitText(text("IGUI_WLM_Title", "Wardrobe Loadouts"):upper(), UIFont.Medium, reachX - 36 * scale), 24 * scale, 20 * scale, colors.text.r, colors.text.g, colors.text.b, 1, UIFont.Medium)
-    self:drawText(text("IGUI_WLM_ManagerSubtitle", "Manage your equipment sets"), 25 * scale, 46 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
+    local subtitle = text("IGUI_WLM_ManagerSubtitle", "Manage your equipment sets")
+    if self.preview then
+        subtitle = subtitle .. "  ·  " .. string.format(text("IGUI_WLM_StorageWeight", "Storage %s/%s"),
+            formatWeight(self.preview.storageWeight), formatWeight(self.preview.storageCapacity))
+    end
+    self:drawText(fitText(subtitle, UIFont.Small, self.headerButtonsLeft - 36 * scale), 25 * scale, 46 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
     local reachColor = self.inReach and { r = 0.36, g = 0.80, b = 0.46 } or { r = 0.95, g = 0.42, b = 0.35 }
     self:drawText(reachText, reachX, 28 * scale, reachColor.r, reachColor.g, reachColor.b, 1, UIFont.Small)
     self:drawText(text("IGUI_WLM_Sets", "LOADOUTS"), 18 * scale, 94 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
@@ -463,7 +490,8 @@ function ISWardrobeLoadoutsUI:render()
     local titleWidth = math.max(0, self.updateButton.x - self.detailX - 12 * scale)
     self:drawText(fitText(title, UIFont.Medium, titleWidth), self.detailX, 94 * scale, colors.text.r, colors.text.g, colors.text.b, 1, UIFont.Medium)
     local summary = not data and text("IGUI_WLM_Loading", "Loading wardrobe data...")
-        or profile and tostring(#WLM.profileItems(profile)) .. " " .. text("IGUI_WLM_SavedItems", "saved items")
+        or profile and string.format(text("IGUI_WLM_LoadoutWeight", "%d saved items · %s weight"),
+            #WLM.profileItems(profile), formatWeight(self.preview and self.preview.loadoutWeight))
         or text("IGUI_WLM_EmptySlotHint", "Empty slot - store your current equipment here")
     self:drawText(fitText(summary, UIFont.Small, self.detailW - 110 * scale), self.detailX, 124 * scale, colors.muted.r, colors.muted.g, colors.muted.b, 1, UIFont.Small)
     local status = not profile and text("IGUI_WLM_EmptySlot", "EMPTY") or active and text("IGUI_WLM_Active", "ACTIVE") or text("IGUI_WLM_Stored", "STORED")
@@ -476,7 +504,7 @@ function ISWardrobeLoadoutsUI:render()
     end
     if message then
         local c = error and { r = 0.95, g = 0.42, b = 0.35 } or colors.muted
-        self:drawText(fitText(message, UIFont.Small, self.deleteButton.x - 36 * scale), 18 * scale, self.footerY + 24 * scale, c.r, c.g, c.b, 1, UIFont.Small)
+        self:drawText(fitText(message, UIFont.Small, self.removeLoadoutButton.x - 28 * scale), 18 * scale, self.footerY + 24 * scale, c.r, c.g, c.b, 1, UIFont.Small)
     end
 end
 
@@ -560,12 +588,16 @@ function ISWardrobeLoadoutsUI:refresh()
     self.updateButton:setTitle(text("IGUI_WLM_Rename", "Rename"))
     self.iconButton:setTitle(text("IGUI_WLM_Icon", "Icon"))
     self.deleteButton:setTitle(text("IGUI_WLM_TakeSlot", "Take"))
+    self.removeLoadoutButton:setTitle(text("IGUI_WLM_Delete", "Delete"))
+    self.repairButton:setTitle(text("IGUI_WLM_RepairMissing", "Repair"))
     self.mergeButton:setTitle(text("IGUI_WLM_Merge", "Merge"))
     self.mergeButton.tooltip = text("IGUI_WLM_MergeTip", "Add this set to your current equipment and empty its slot. Conflicting items stay in your inventory.")
     self.saveDialog.cancelButton:setTitle(text("IGUI_WLM_Cancel", "Cancel"))
     self.saveDialog.saveButton:setTitle(text("IGUI_WLM_Confirm", "Confirm"))
     self.saveButton.tooltip = text("IGUI_WLM_StoreTip", "Move your current equipment into the selected empty slot.")
     self.deleteButton.tooltip = text("IGUI_WLM_TakeTip", "Equip this set and empty its slot. Replaced equipment stays in your inventory.")
+    self.removeLoadoutButton.tooltip = text("IGUI_WLM_DeleteLoadoutTip", "Delete this loadout entry. Items already stored in the furniture stay there.")
+    self.repairButton.tooltip = text("IGUI_WLM_RepairMissingTip", "Remove only missing item references and keep the rest of this loadout.")
     self.infoButton.tooltip = text("IGUI_WLM_FooterNote", "Shared rules: Sandbox Options | Interface scale: Mod Options")
     local selectedSlot = self.selectedSlot or 1
     local oldSlotScroll = self.list:getYScroll()
@@ -608,15 +640,20 @@ function ISWardrobeLoadoutsUI:updatePreview()
     local active = profile and tostring(self.selectedId) == tostring(activeId)
     local current = player and WLM.Client.captureProfile(player, "Preview")
     local targetRoles, currentRoles = WLM.profileRoles(profile), WLM.profileRoles(current)
-    local preview = { equip = 0, unequip = 0, retrieve = 0, store = 0, missing = 0 }
+    local preview = { equip = 0, unequip = 0, retrieve = 0, store = 0, missing = 0, loadoutWeight = 0 }
     self.missingIds = {}
     for id, roles in pairs(targetRoles) do
         local inventoryItem = WLM.findItem(player and player:getInventory(), id)
         local storedItem = WLM.findItem(wardrobe, id)
         if not inventoryItem and not storedItem then self.missingIds[id] = true; preview.missing = preview.missing + 1 end
+        preview.loadoutWeight = preview.loadoutWeight + WLM.itemWeight(inventoryItem or storedItem)
         if storedItem then preview.retrieve = preview.retrieve + 1 end
         if (#roles > 1 or roles[1] ~= "keyring") and table.concat(roles, ";") ~= table.concat(currentRoles[id] or {}, ";") then preview.equip = preview.equip + 1 end
     end
+    local storageOk, storageWeight = pcall(WLM.storageWeight, wardrobe)
+    local capacityOk, storageCapacity = pcall(WLM.capacityLimit, wardrobe)
+    preview.storageWeight = storageOk and storageWeight or 0
+    preview.storageCapacity = capacityOk and storageCapacity or 0
     for id, roles in pairs(currentRoles) do
         if not targetRoles[id] then
             preview.store = preview.store + 1
@@ -624,7 +661,7 @@ function ISWardrobeLoadoutsUI:updatePreview()
         end
     end
     self.preview = preview
-    local busy = WLM.Client.pendingStore or WLM.Client.pendingStoreRequest or WLM.Client.pendingSwitch or WLM.Client.switchPendingRequest
+    local busy = WLM.Client.pendingStore or WLM.Client.pendingStoreRequest or WLM.Client.pendingSwitch or WLM.Client.switchPendingRequest or WLM.Client.pendingRepair
     local foreignActive = profile and WLM.isSetActive(data, profile.id) and not active
     local canAccess = WLM.canAccessStorage(player, WLM.Client.object)
     self.inReach = canAccess
@@ -635,6 +672,8 @@ function ISWardrobeLoadoutsUI:updatePreview()
     self.applyButton:setEnable(usable and not foreignActive and preview.missing == 0 and (profile ~= nil or preview.store > 0))
     self.deleteButton:setEnable(usable and profile ~= nil and not active and not foreignActive and preview.missing == 0)
     self.mergeButton:setEnable(self.deleteButton.enable)
+    self.removeLoadoutButton:setEnable(usable and profile ~= nil and not foreignActive)
+    self.repairButton:setEnable(usable and profile ~= nil and not foreignActive and preview.missing > 0)
     self.saveButton:setEnable(usable and (not profile or active) and current ~= nil and #WLM.profileItems(current) > 0)
     if not profile or active then self.applyButton:setEnable(self.saveButton.enable) end
     self.applyButton.tooltip = (not profile or active) and self.saveButton.tooltip or text("IGUI_WLM_SwapTip", "Equip this set and store your current equipment in the same slot.")
@@ -744,6 +783,37 @@ end
 
 function ISWardrobeLoadoutsUI:deleteSelected()
     if self.selectedId then WLM.Client.deleteProfile(self.selectedId) end
+end
+
+function ISWardrobeLoadoutsUI.confirmDelete(target, button, setId)
+    if button.internal == "YES" then WLM.Client.deleteProfile(setId) end
+end
+
+function ISWardrobeLoadoutsUI:confirmDeleteSelected()
+    if not self.removeLoadoutButton.enable or not self.selectedId then return end
+    local data = WLM.Client.data or WLM.Client.getData()
+    local profile = data and data.sets and data.sets[tostring(self.selectedId)]
+    if not profile then return end
+    local prompt = text("IGUI_WLM_DeleteLoadoutConfirm", "Delete this loadout entry? Equipment already stored in the furniture will remain there.")
+    local modal = ISModalDialog:new(0, 0, 420, 150, prompt, true, self, ISWardrobeLoadoutsUI.confirmDelete, WLM.Client.playerNum, tostring(self.selectedId))
+    modal:initialise()
+    modal:setCapture(true)
+    modal:addToUIManager()
+    modal:setAlwaysOnTop(true)
+end
+
+function ISWardrobeLoadoutsUI.confirmRepair(target, button, setId)
+    if button.internal == "YES" then WLM.Client.repairProfile(setId) end
+end
+
+function ISWardrobeLoadoutsUI:confirmRepairSelected()
+    if not self.repairButton.enable or not self.selectedId then return end
+    local prompt = text("IGUI_WLM_RepairMissingConfirm", "Remove only missing item references? All remaining equipment stays in this loadout.")
+    local modal = ISModalDialog:new(0, 0, 420, 150, prompt, true, self, ISWardrobeLoadoutsUI.confirmRepair, WLM.Client.playerNum, tostring(self.selectedId))
+    modal:initialise()
+    modal:setCapture(true)
+    modal:addToUIManager()
+    modal:setAlwaysOnTop(true)
 end
 
 function ISWardrobeLoadoutsUI:close()

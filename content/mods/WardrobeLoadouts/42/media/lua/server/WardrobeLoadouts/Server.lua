@@ -256,6 +256,45 @@ local function findItemAnywhere(player, wardrobeContainer, id)
     return WLM.findItem(wardrobeContainer, id) or playerItem(player, id)
 end
 
+local function activeForAnotherPlayer(data, player, setId)
+    local key = WLM.activeKey(player)
+    for playerKey, activeId in pairs(data.activeByPlayer or {}) do
+        if playerKey ~= key and tostring(activeId) == tostring(setId) then return true end
+    end
+    return false
+end
+
+local function handleRepair(player, object, args)
+    local data = WLM.getData(object, false)
+    local setId = tostring(args.setId or "")
+    local profile = data and data.sets[setId]
+    if not profile then return end
+    if data.lock and (data.lockUntil or 0) > getTimestamp() then
+        fail(player, "This wardrobe is being used by another player.", "IGUI_WLM_ErrorLocked")
+        return
+    end
+    if activeForAnotherPlayer(data, player, setId) then
+        fail(player, "This loadout is being used by another player.", "IGUI_WLM_ErrorSetActive")
+        return
+    end
+    local preferences = WLM.normalizePreferences(args.preferences)
+    local missing = {}
+    for _, id in ipairs(WLM.profileItems(profile, preferences)) do
+        if not findItemAnywhere(player, object:getContainer(), id) then missing[#missing + 1] = id end
+    end
+    if #missing == 0 then
+        fail(player, "No missing item references were found.", "IGUI_WLM_NoMissingItems")
+        return
+    end
+    for _, id in ipairs(missing) do WLM.removeProfileItem(profile, id) end
+    if WLM.getActiveId(data, player) == setId or (not next(data.activeByPlayer or {}) and tostring(data.activeId or "") == setId) then
+        WLM.setActiveId(data, player, nil)
+    end
+    object:transmitModData()
+    publishState(player, object, data)
+    send(player, "repairComplete", { setId = setId, removed = #missing })
+end
+
 local function handleBeginSwitch(player, object, args)
     if player:getVehicle() then
         fail(player, "Exit the vehicle before changing loadouts.", "IGUI_WLM_ErrorVehicle")
@@ -443,17 +482,22 @@ local function onClientCommand(module, command, player, args)
         local data = WLM.getData(object, false)
         local id = tostring(args.setId or "")
         if not data or not data.sets[id] then return end
-        if WLM.isSetActive(data, id) then
-            fail(player, "Save another loadout before deleting the active one.", "IGUI_WLM_ErrorSetActive")
-            return
-        end
         if data.lock and (data.lockUntil or 0) > getTimestamp() then
             fail(player, "This wardrobe is being used by another player.", "IGUI_WLM_ErrorLocked")
             return
         end
+        if activeForAnotherPlayer(data, player, id) then
+            fail(player, "This loadout is being used by another player.", "IGUI_WLM_ErrorSetActive")
+            return
+        end
+        if WLM.getActiveId(data, player) == id or (not next(data.activeByPlayer or {}) and tostring(data.activeId or "") == id) then
+            WLM.setActiveId(data, player, nil)
+        end
         data.sets[id] = nil
         object:transmitModData()
         publishState(player, object, data)
+    elseif command == "repair" then
+        handleRepair(player, object, args)
     end
 end
 

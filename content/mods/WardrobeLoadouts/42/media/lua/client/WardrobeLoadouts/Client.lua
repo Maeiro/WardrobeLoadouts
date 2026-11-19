@@ -489,7 +489,7 @@ function Client.saveProfile(profile, updateId)
         Client.showError(WLM.text("IGUI_WLM_ErrorNameLength", "Loadout names must be 64 bytes or fewer."))
         return false
     end
-    if Client.pendingStore or Client.pendingStoreRequest or Client.pendingSwitch or Client.switchPendingRequest then
+    if Client.pendingStore or Client.pendingStoreRequest or Client.pendingSwitch or Client.switchPendingRequest or Client.pendingRepair then
         Client.showError(WLM.text("IGUI_WLM_ErrorBusy", "Finish the current action before storing equipment."))
         return false
     end
@@ -560,7 +560,7 @@ end
 
 function Client.renameProfile(setId, value, slot)
     if not Client.object then return false end
-    if Client.pendingStore or Client.pendingStoreRequest or Client.pendingSwitch or Client.switchPendingRequest then return false end
+    if Client.pendingStore or Client.pendingStoreRequest or Client.pendingSwitch or Client.switchPendingRequest or Client.pendingRepair then return false end
     local name = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if #name == 0 or #name > 64 then
         Client.showError(WLM.text("IGUI_WLM_ErrorNameLength", "Loadout names must be 1 to 64 bytes long."))
@@ -589,7 +589,7 @@ function Client.renameProfile(setId, value, slot)
 end
 
 function Client.setSlotIcon(slot, icon)
-    if not Client.object or Client.pendingStore or Client.pendingSwitch or Client.pendingStoreRequest or Client.switchPendingRequest then return false end
+    if not Client.object or Client.pendingStore or Client.pendingSwitch or Client.pendingStoreRequest or Client.switchPendingRequest or Client.pendingRepair then return false end
     local data = Client.data or WLM.getData(Client.object, false)
     slot = tonumber(slot)
     local _, count = WLM.slots(data, Client.object:getContainer())
@@ -615,7 +615,7 @@ end
 
 function Client.deleteProfile(setId)
     if not Client.object or not setId then return end
-    if Client.pendingStore or Client.pendingStoreRequest or Client.pendingSwitch or Client.switchPendingRequest then return end
+    if Client.pendingStore or Client.pendingStoreRequest or Client.pendingSwitch or Client.switchPendingRequest or Client.pendingRepair then return end
     local args = WLM.objectArgs(Client.object)
     if not args then return end
     args.setId = tostring(setId)
@@ -624,14 +624,73 @@ function Client.deleteProfile(setId)
         return
     end
     local data = WLM.getData(Client.object, false)
-    if not data then return end
-    if WLM.isSetActive(data, setId) then
-        Client.showError(WLM.text("IGUI_WLM_ErrorSetActive", "Save another loadout before deleting the active one."))
+    local profile = data and data.sets[tostring(setId)]
+    if not profile then return end
+    local activeKey = WLM.activeKey(getPlayer(Client.playerNum))
+    for key, activeId in pairs(data.activeByPlayer or {}) do
+        if key ~= activeKey and tostring(activeId) == tostring(setId) then
+            Client.showError(WLM.text("IGUI_WLM_ErrorSetActive", "This loadout is being used by another player."))
+            return
+        end
+    end
+    if data.lock and (data.lockUntil or 0) > getTimestamp() then
+        Client.showError(WLM.text("IGUI_WLM_ErrorLocked", "Another player is using this wardrobe."))
         return
+    end
+    if WLM.getActiveId(data, getPlayer(Client.playerNum)) == tostring(setId)
+            or (not next(data.activeByPlayer or {}) and tostring(data.activeId or "") == tostring(setId)) then
+        WLM.setActiveId(data, getPlayer(Client.playerNum), nil)
     end
     data.sets[tostring(setId)] = nil
     if Client.object.transmitModData then Client.object:transmitModData() end
     if Client.window then Client.window:refresh() end
+end
+
+function Client.repairProfile(setId)
+    if not Client.object or not setId or Client.pendingStore or Client.pendingStoreRequest
+            or Client.pendingSwitch or Client.switchPendingRequest or Client.pendingRepair then return end
+    local data = Client.data or WLM.getData(Client.object, false)
+    local profile = data and data.sets[tostring(setId)]
+    if not profile then return end
+    local player = getPlayer(Client.playerNum)
+    if data.lock and (data.lockUntil or 0) > getTimestamp() then
+        Client.showError(WLM.text("IGUI_WLM_ErrorLocked", "Another player is using this wardrobe."))
+        return
+    end
+    for key, activeId in pairs(data.activeByPlayer or {}) do
+        if key ~= WLM.activeKey(player) and tostring(activeId) == tostring(setId) then
+            Client.showError(WLM.text("IGUI_WLM_ErrorSetActive", "This loadout is being used by another player."))
+            return
+        end
+    end
+    local preferences = WLM.clientPreferences()
+    local missing = {}
+    local wardrobe = Client.object:getContainer()
+    for _, id in ipairs(WLM.profileItems(profile, preferences)) do
+        if not inventoryItem(player, id) and not WLM.findItem(wardrobe, id) then missing[#missing + 1] = id end
+    end
+    if #missing == 0 then
+        Client.showError(WLM.text("IGUI_WLM_NoMissingItems", "No missing item references were found."))
+        return
+    end
+    local args = WLM.objectArgs(Client.object)
+    if not args then return end
+    args.setId = tostring(setId)
+    args.preferences = preferences
+    if isClient() then
+        Client.pendingRepair = tostring(setId)
+        sendClientCommand(player, WLM.ID, "repair", args)
+        if Client.window then Client.window:setMessage(WLM.text("IGUI_WLM_Repairing", "Repairing loadout..."), false) end
+        return true
+    end
+    for _, id in ipairs(missing) do WLM.removeProfileItem(profile, id) end
+    if WLM.getActiveId(data, player) == tostring(setId) then WLM.setActiveId(data, player, nil) end
+    if Client.object.transmitModData then Client.object:transmitModData() end
+    if Client.window then
+        Client.window:setMessage(string.format(WLM.text("IGUI_WLM_RepairComplete", "Removed %d missing item reference(s). The other items are still saved."), #missing), false)
+        Client.window:refresh()
+    end
+    return true
 end
 
 local function targetIsEquipped(player, profile)
@@ -858,7 +917,7 @@ function Client.beginSwitch(targetId, slotAction, swap, merge)
     merge = merge == true
     if merge then slotAction, swap = true, false end
     if not Client.object then return end
-    if Client.switchPendingRequest or Client.pendingSwitch or Client.pendingStoreRequest or Client.pendingStore then return end
+    if Client.switchPendingRequest or Client.pendingSwitch or Client.pendingStoreRequest or Client.pendingStore or Client.pendingRepair then return end
     local player = getPlayer(Client.playerNum)
     if not player then return end
     if player:getVehicle() then
@@ -1370,7 +1429,8 @@ function Client.open(object, playerNum)
     local uiScale = WLM.Options and WLM.Options.uiScale and WLM.Options.uiScale() or 1
     local window = Client.window
     local hasCurrentControls = window and window.closeButton and window.list and window.saveButton
-        and window.updateButton and window.deleteButton and window.mergeButton and window.applyButton and window.saveDialog
+        and window.updateButton and window.deleteButton and window.removeLoadoutButton and window.repairButton
+        and window.mergeButton and window.applyButton and window.saveDialog
         and window.saveDialog.nameEntry and window.saveDialog.cancelButton and window.saveDialog.saveButton
         and window.slotInterface == 6 and window.iconButton and window.scaleUpButton and window.infoButton
         and window.groupLists and window.groupLists.clothes
@@ -1426,6 +1486,7 @@ local function onServerCommand(module, command, args)
             end
         end
     elseif command == "error" then
+        Client.pendingRepair = nil
         local pendingStore = Client.pendingStore
         local pendingSwitch = Client.pendingSwitch
         if pendingStore then logOperation("store", false, pendingStore.profile, args.message or args.messageKey) end
@@ -1437,6 +1498,13 @@ local function onServerCommand(module, command, args)
         Client.pendingStoreRequest = false
         Client.pendingStore = nil
         Client.showError(WLM.text(args.messageKey, args.message or "The wardrobe request failed."))
+    elseif command == "repairComplete" then
+        if tostring(Client.pendingRepair or "") ~= tostring(args.setId or "") then return end
+        Client.pendingRepair = nil
+        if Client.window and Client.object then
+            Client.window:setMessage(string.format(WLM.text("IGUI_WLM_RepairComplete", "Removed %d missing item reference(s). The other items are still saved."), tonumber(args.removed) or 0), false)
+            Client.window:refresh()
+        end
     elseif command == "storeReady" then
         local pending = Client.pendingStore
         Client.pendingStoreRequest = false

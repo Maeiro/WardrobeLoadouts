@@ -337,6 +337,26 @@ function WLM.profileItems(profile, preferences)
     return found
 end
 
+function WLM.removeProfileItem(profile, itemId)
+    if type(profile) ~= "table" then return end
+    itemId = tonumber(itemId)
+    if not itemId then return end
+    local function removeEntries(entries)
+        if type(entries) ~= "table" then return end
+        for index = #entries, 1, -1 do
+            local entry = entries[index]
+            if type(entry) == "table" and tonumber(entry.id) == itemId then table.remove(entries, index) end
+        end
+    end
+    removeEntries(profile.worn)
+    removeEntries(profile.attached)
+    if profile.hands then
+        if type(profile.hands.primary) == "table" and tonumber(profile.hands.primary.id) == itemId then profile.hands.primary = nil end
+        if type(profile.hands.secondary) == "table" and tonumber(profile.hands.secondary.id) == itemId then profile.hands.secondary = nil end
+    end
+    if type(profile.keyRing) == "table" and tonumber(profile.keyRing.id) == itemId then profile.keyRing = nil end
+end
+
 function WLM.profileRoles(profile, preferences)
     local settings = preferences and WLM.normalizePreferences(preferences) or WLM.settings()
     local roles = {}
